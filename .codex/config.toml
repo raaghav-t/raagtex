@@ -1,0 +1,15 @@
+# raagTex Codex project config
+# Keep this conservative and easy to review.
+
+[project]
+name = "raagTex"
+
+[defaults]
+# Prefer incremental, reviewable changes.
+minimal_diff = true
+update_docs_on_architecture_change = true
+
+[verification]
+# Lightweight early-stage workflow hooks.
+default_build_script = "Scripts/build.sh"
+default_test_script = "Scripts/test.sh"
