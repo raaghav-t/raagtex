@@ -4,7 +4,7 @@ struct IOSRootView: View {
     var body: some View {
         NavigationStack {
             List {
-                Section("LaTeX Cockpit Viewer") {
+                Section("raagtex Viewer") {
                     Label("Companion scaffold is ready", systemImage: "iphone.gen3.radiowaves.left.and.right")
                     Text("V2 will pair with macOS to receive live PDF updates and compile-state summaries.")
                         .foregroundStyle(.secondary)

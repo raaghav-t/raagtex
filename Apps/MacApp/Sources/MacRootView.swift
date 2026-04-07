@@ -1,9 +1,11 @@
 import AppKit
 import Core
+import Shared
 import SwiftUI
 
 struct MacRootView: View {
-    @StateObject private var viewModel = MacRootViewModel()
+    @EnvironmentObject private var viewModel: MacRootViewModel
+    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
         NavigationSplitView {
@@ -12,6 +14,8 @@ struct MacRootView: View {
             detailPane
         }
         .navigationSplitViewStyle(.balanced)
+        .tint(accentColor)
+        .preferredColorScheme(preferredColorScheme)
     }
 
     private var sidebar: some View {
@@ -19,6 +23,47 @@ struct MacRootView: View {
             Section("Workspace") {
                 Button("Open Project...") {
                     openProjectPanel()
+                }
+                Button("Open Viewer Window") {
+                    openWindow(id: ViewerWindow.sceneID)
+                }
+                .disabled(viewModel.documentState.pdfURL == nil)
+            }
+
+            Section("Experience") {
+                Picker("Theme", selection: $viewModel.interfaceTheme) {
+                    ForEach(InterfaceTheme.allCases, id: \.self) { theme in
+                        Text(theme.rawValue.capitalized).tag(theme)
+                    }
+                }
+
+                Picker("Mode", selection: $viewModel.interfaceMode) {
+                    ForEach(InterfaceMode.allCases, id: \.self) { mode in
+                        Text(mode.rawValue.capitalized).tag(mode)
+                    }
+                }
+
+                Picker("Layout", selection: $viewModel.editorPreviewLayout) {
+                    Text("Side by Side").tag(EditorPreviewLayout.sideBySide)
+                    Text("Stacked").tag(EditorPreviewLayout.stacked)
+                }
+
+                Toggle("AutoCorrect", isOn: $viewModel.editorAutoCorrectEnabled)
+
+                HStack {
+                    Text("Transparency")
+                    Slider(value: $viewModel.interfaceTransparency, in: 0.25 ... 1.0)
+                }
+
+                if viewModel.interfaceTheme == .custom {
+                    ColorPicker(
+                        "Accent",
+                        selection: Binding(
+                            get: { accentColor },
+                            set: updateAccentColor
+                        ),
+                        supportsOpacity: false
+                    )
                 }
             }
 
@@ -41,7 +86,7 @@ struct MacRootView: View {
                 }
             }
         }
-        .navigationTitle("LaTeX Cockpit")
+        .navigationTitle("raagtex")
     }
 
     @ViewBuilder
@@ -50,7 +95,7 @@ struct MacRootView: View {
             ContentUnavailableView {
                 Label("Open a LaTeX Project", systemImage: "doc.text.magnifyingglass")
             } description: {
-                Text("Choose a local folder to start compiling and previewing PDFs.")
+                Text("Choose a local folder to start writing, compiling, and previewing PDFs.")
             } actions: {
                 Button("Open Project...") {
                     openProjectPanel()
@@ -62,7 +107,7 @@ struct MacRootView: View {
                 Divider()
                 contentSplit
             }
-            .background(.regularMaterial)
+            .background(.regularMaterial.opacity(viewModel.interfaceTransparency))
             .overlay(alignment: .top) {
                 if let banner = viewModel.bannerMessage {
                     Text(banner)
@@ -110,11 +155,33 @@ struct MacRootView: View {
             Toggle("Auto", isOn: $viewModel.autoCompileEnabled)
                 .toggleStyle(.switch)
 
+            if viewModel.interfaceMode == .debug {
+                Toggle("Zen", isOn: Binding(
+                    get: { viewModel.interfaceMode == .zen },
+                    set: { viewModel.interfaceMode = $0 ? .zen : .debug }
+                ))
+                .toggleStyle(.switch)
+            }
+
             Spacer()
 
             Text(viewModel.statusLine)
                 .font(.callout)
                 .foregroundStyle(.secondary)
+
+            Button {
+                viewModel.runAutoCorrect()
+            } label: {
+                Label("Fix Typos", systemImage: "wand.and.stars")
+            }
+            .disabled(viewModel.editorAutoCorrectEnabled == false)
+
+            Button {
+                viewModel.saveEditorToDisk()
+            } label: {
+                Label("Save", systemImage: "square.and.arrow.down")
+            }
+            .disabled(viewModel.hasUnsavedEditorChanges == false)
 
             Button {
                 viewModel.compileNow(trigger: .manual)
@@ -131,34 +198,87 @@ struct MacRootView: View {
             .disabled(viewModel.isCompiling)
         }
         .padding(12)
-        .background(.ultraThinMaterial)
+        .background(.ultraThinMaterial.opacity(viewModel.interfaceTransparency))
     }
 
     private var contentSplit: some View {
         HSplitView {
-            PDFPreviewView(pdfURL: viewModel.documentState.pdfURL)
-                .frame(minWidth: 420, minHeight: 480)
+            editorAndPreview
+                .frame(minWidth: 560, minHeight: 480)
 
-            VStack(spacing: 0) {
-                Picker("Output", selection: $viewModel.selectedLogTab) {
-                    ForEach(MacRootViewModel.LogTab.allCases, id: \.self) { tab in
-                        Text(tab.rawValue).tag(tab)
+            if viewModel.interfaceMode == .debug {
+                VStack(spacing: 0) {
+                    Picker("Output", selection: $viewModel.selectedLogTab) {
+                        ForEach(MacRootViewModel.LogTab.allCases, id: \.self) { tab in
+                            Text(tab.rawValue).tag(tab)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .padding(10)
+
+                    Divider()
+
+                    switch viewModel.selectedLogTab {
+                    case .diagnostics:
+                        diagnosticsList
+                    case .raw:
+                        rawLogView
                     }
                 }
-                .pickerStyle(.segmented)
-                .padding(10)
+                .frame(minWidth: 320)
+            }
+        }
+    }
 
-                Divider()
-
-                switch viewModel.selectedLogTab {
-                case .diagnostics:
-                    diagnosticsList
-                case .raw:
-                    rawLogView
+    private var editorAndPreview: some View {
+        Group {
+            if viewModel.editorPreviewLayout == .stacked {
+                VSplitView {
+                    editorPane
+                    previewPane
+                }
+            } else {
+                HSplitView {
+                    editorPane
+                        .frame(minWidth: 280)
+                    previewPane
+                        .frame(minWidth: 280)
                 }
             }
-            .frame(minWidth: 320)
         }
+    }
+
+    private var editorPane: some View {
+        VStack(spacing: 0) {
+            HStack {
+                Text("Editor")
+                    .font(.subheadline.weight(.semibold))
+                Spacer()
+                if viewModel.hasUnsavedEditorChanges {
+                    Text("Unsaved")
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                }
+                Button("Revert") {
+                    viewModel.revertEditorToDisk()
+                }
+                .buttonStyle(.borderless)
+                .disabled(viewModel.hasUnsavedEditorChanges == false)
+            }
+            .padding(.horizontal, 10)
+            .padding(.top, 8)
+
+            TextEditor(text: $viewModel.editorText)
+                .font(.system(.body, design: .monospaced))
+                .autocorrectionDisabled(viewModel.editorAutoCorrectEnabled == false)
+                .padding(8)
+                .background(Color(nsColor: .textBackgroundColor))
+        }
+    }
+
+    private var previewPane: some View {
+        PDFPreviewView(pdfURL: viewModel.documentState.pdfURL)
+            .background(Color(nsColor: .windowBackgroundColor))
     }
 
     private var diagnosticsList: some View {
@@ -197,6 +317,33 @@ struct MacRootView: View {
         .background(Color(nsColor: .textBackgroundColor))
     }
 
+    private var preferredColorScheme: ColorScheme? {
+        switch viewModel.interfaceTheme {
+        case .light:
+            return .light
+        case .dark, .custom:
+            return .dark
+        }
+    }
+
+    private var accentColor: Color {
+        Color(
+            red: viewModel.accentRed,
+            green: viewModel.accentGreen,
+            blue: viewModel.accentBlue
+        )
+    }
+
+    private func updateAccentColor(_ color: Color) {
+        #if os(macOS)
+            let nsColor = NSColor(color)
+            let rgb = nsColor.usingColorSpace(.sRGB) ?? .systemBlue
+            viewModel.accentRed = Double(rgb.redComponent)
+            viewModel.accentGreen = Double(rgb.greenComponent)
+            viewModel.accentBlue = Double(rgb.blueComponent)
+        #endif
+    }
+
     private func color(for severity: CompileDiagnostic.Severity) -> Color {
         switch severity {
         case .info:
@@ -224,4 +371,5 @@ struct MacRootView: View {
 
 #Preview {
     MacRootView()
+        .environmentObject(MacRootViewModel())
 }

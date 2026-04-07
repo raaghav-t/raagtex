@@ -2,7 +2,7 @@
 import PackageDescription
 
 let package = Package(
-    name: "LaTeXCockpitModules",
+    name: "raagtex",
     platforms: [
         .macOS(.v14),
         .iOS(.v17)
@@ -10,7 +10,7 @@ let package = Package(
     products: [
         .library(name: "Core", targets: ["Core"]),
         .library(name: "Shared", targets: ["Shared"]),
-        .executable(name: "LaTeXCockpitMac", targets: ["MacApp"])
+        .executable(name: "raagtex", targets: ["MacApp"])
     ],
     targets: [
         .target(

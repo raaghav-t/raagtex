@@ -12,6 +12,7 @@ final class MacRootViewModel: ObservableObject {
     @Published var selectedMainTex: String = "" {
         didSet {
             guard oldValue != selectedMainTex else { return }
+            loadSelectedMainFileIntoEditor()
             persistSettings()
         }
     }
@@ -31,6 +32,58 @@ final class MacRootViewModel: ObservableObject {
         }
     }
 
+    @Published var interfaceTheme: InterfaceTheme = .dark {
+        didSet {
+            guard oldValue != interfaceTheme else { return }
+            persistSettings()
+        }
+    }
+
+    @Published var interfaceMode: InterfaceMode = .debug {
+        didSet {
+            guard oldValue != interfaceMode else { return }
+            persistSettings()
+        }
+    }
+
+    @Published var interfaceTransparency: Double = 0.78 {
+        didSet {
+            let clamped = min(max(interfaceTransparency, 0.25), 1.0)
+            if clamped != interfaceTransparency {
+                interfaceTransparency = clamped
+                return
+            }
+            guard oldValue != interfaceTransparency else { return }
+            persistSettings()
+        }
+    }
+
+    @Published var editorPreviewLayout: EditorPreviewLayout = .sideBySide {
+        didSet {
+            guard oldValue != editorPreviewLayout else { return }
+            persistSettings()
+        }
+    }
+
+    @Published var editorAutoCorrectEnabled: Bool = true {
+        didSet {
+            guard oldValue != editorAutoCorrectEnabled else { return }
+            persistSettings()
+        }
+    }
+
+    @Published var accentRed: Double = 0.24 { didSet { persistPaletteChange(from: oldValue, to: accentRed) } }
+    @Published var accentGreen: Double = 0.47 { didSet { persistPaletteChange(from: oldValue, to: accentGreen) } }
+    @Published var accentBlue: Double = 0.92 { didSet { persistPaletteChange(from: oldValue, to: accentBlue) } }
+
+    @Published var editorText = "" {
+        didSet {
+            guard isLoadingEditorText == false, oldValue != editorText else { return }
+            hasUnsavedEditorChanges = true
+        }
+    }
+
+    @Published private(set) var hasUnsavedEditorChanges = false
     @Published private(set) var documentState = DocumentState()
     @Published private(set) var isCompiling = false
     @Published var selectedLogTab = LogTab.diagnostics
@@ -47,6 +100,7 @@ final class MacRootViewModel: ObservableObject {
 
     private var watcher: DirectoryWatcher?
     private var debounceWorkItem: DispatchWorkItem?
+    private var isLoadingEditorText = false
 
     init(
         recentStore: any RecentProjectsStore = UserDefaultsRecentProjectsStore(),
@@ -85,6 +139,14 @@ final class MacRootViewModel: ObservableObject {
         let settings = settingsStore.load(projectRootPath: url.path)
         selectedEngine = settings.latexEngine
         autoCompileEnabled = settings.autoCompileEnabled
+        interfaceTheme = settings.interfaceTheme
+        interfaceMode = settings.interfaceMode
+        interfaceTransparency = settings.interfaceTransparency
+        editorPreviewLayout = settings.editorPreviewLayout
+        editorAutoCorrectEnabled = settings.editorAutoCorrectEnabled
+        accentRed = settings.customPalette.accentRed
+        accentGreen = settings.customPalette.accentGreen
+        accentBlue = settings.customPalette.accentBlue
 
         if let savedMain = settings.mainTexRelativePath, texFiles.contains(savedMain) {
             selectedMainTex = savedMain
@@ -94,6 +156,7 @@ final class MacRootViewModel: ObservableObject {
 
         documentState.projectRoot = url
         documentState.mainFileRelativePath = selectedMainTex
+        loadSelectedMainFileIntoEditor()
 
         pushRecentProject(url)
         configureWatcher()
@@ -116,6 +179,14 @@ final class MacRootViewModel: ObservableObject {
         guard selectedMainTex.isEmpty == false else {
             bannerMessage = "Select a main .tex file before compiling."
             return
+        }
+
+        if editorAutoCorrectEnabled {
+            runAutoCorrect()
+        }
+
+        if hasUnsavedEditorChanges {
+            saveEditorToDisk()
         }
 
         isCompiling = true
@@ -168,8 +239,58 @@ final class MacRootViewModel: ObservableObject {
         documentState.mainFileRelativePath = value
     }
 
+    func saveEditorToDisk() {
+        guard let target = selectedMainFileURL else { return }
+
+        do {
+            try editorText.write(to: target, atomically: true, encoding: .utf8)
+            hasUnsavedEditorChanges = false
+            bannerMessage = "Saved \(selectedMainTex)"
+        } catch {
+            bannerMessage = "Save failed: \(error.localizedDescription)"
+        }
+    }
+
+    func revertEditorToDisk() {
+        loadSelectedMainFileIntoEditor()
+    }
+
+    func runAutoCorrect() {
+        guard editorAutoCorrectEnabled else { return }
+
+        var updated = editorText
+        let corrections: [(String, String)] = [
+            ("teh", "the"),
+            ("recieve", "receive"),
+            ("seperate", "separate"),
+            ("occurence", "occurrence"),
+            ("enviroment", "environment"),
+            ("langauge", "language"),
+            ("definately", "definitely"),
+            ("accomodate", "accommodate")
+        ]
+
+        for (typo, fix) in corrections {
+            updated = updated.replacingOccurrences(
+                of: "\b\(NSRegularExpression.escapedPattern(for: typo))\b",
+                with: fix,
+                options: [.regularExpression, .caseInsensitive]
+            )
+        }
+
+        if updated != editorText {
+            editorText = updated
+            bannerMessage = "AutoCorrect applied common typo fixes."
+        }
+    }
+
     func clearBanner() {
         bannerMessage = nil
+    }
+
+    var selectedMainFileURL: URL? {
+        guard let projectRoot, selectedMainTex.isEmpty == false else { return nil }
+        return projectRoot.appending(path: selectedMainTex)
     }
 
     private func pushRecentProject(_ url: URL) {
@@ -193,9 +314,20 @@ final class MacRootViewModel: ObservableObject {
         let settings = UserSettings(
             mainTexRelativePath: selectedMainTex.isEmpty ? nil : selectedMainTex,
             latexEngine: selectedEngine,
-            autoCompileEnabled: autoCompileEnabled
+            autoCompileEnabled: autoCompileEnabled,
+            interfaceTheme: interfaceTheme,
+            interfaceMode: interfaceMode,
+            interfaceTransparency: interfaceTransparency,
+            editorPreviewLayout: editorPreviewLayout,
+            editorAutoCorrectEnabled: editorAutoCorrectEnabled,
+            customPalette: CustomThemePalette(accentRed: accentRed, accentGreen: accentGreen, accentBlue: accentBlue)
         )
         settingsStore.save(settings, projectRootPath: projectRoot.path)
+    }
+
+    private func persistPaletteChange(from oldValue: Double, to newValue: Double) {
+        guard oldValue != newValue else { return }
+        persistSettings()
     }
 
     private func configureWatcher() {
@@ -224,6 +356,26 @@ final class MacRootViewModel: ObservableObject {
 
         debounceWorkItem = work
         DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + 0.6, execute: work)
+    }
+
+    private func loadSelectedMainFileIntoEditor() {
+        guard let source = selectedMainFileURL else {
+            isLoadingEditorText = true
+            editorText = ""
+            isLoadingEditorText = false
+            hasUnsavedEditorChanges = false
+            return
+        }
+
+        do {
+            let content = try String(contentsOf: source, encoding: .utf8)
+            isLoadingEditorText = true
+            editorText = content
+            isLoadingEditorText = false
+            hasUnsavedEditorChanges = false
+        } catch {
+            bannerMessage = "Unable to load \(selectedMainTex): \(error.localizedDescription)"
+        }
     }
 }
 

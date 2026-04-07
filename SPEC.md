@@ -1,7 +1,7 @@
-# LaTeX Cockpit - Initial Product Spec
+# raagtex - Initial Product Spec
 
 ## Product Vision
-LaTeX Cockpit is a calm, native Apple experience for local LaTeX workflows: write in your preferred editor, compile quickly, and keep PDF output and compile state central.
+raagtex is a calm, native Apple experience for local LaTeX workflows: write in your preferred editor, compile quickly, and keep PDF output and compile state central.
 
 ## Target Users
 - Researchers and students working on papers/theses with local LaTeX projects
@@ -17,15 +17,15 @@ LaTeX Cockpit is a calm, native Apple experience for local LaTeX workflows: writ
 - Prioritize local-first workflow
 
 ## V1 Features
-- macOS app scaffold
+- macOS app shell with built-in editor + preview (with optional typo AutoCorrect)
 - Choose/open a LaTeX project
 - Choose a main `.tex` file
 - Compile via `latexmk`
 - Basic structured compile output model
-- PDF preview pane
+- PDF preview pane with optional pop-out viewer window and switchable stacked/split editor layout
 - Auto-compile toggle
 - Recent project persistence
-- Settings model for engine/main file/auto-compile
+- Settings model for engine/main file/auto-compile/theme/mode/transparency
 
 ## V2 Features
 - Paired iPhone/iPad viewer

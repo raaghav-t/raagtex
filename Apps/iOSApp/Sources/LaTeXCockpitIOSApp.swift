@@ -1,7 +1,7 @@
 import SwiftUI
 
 @main
-struct LaTeXCockpitIOSApp: App {
+struct RaagtexIOSApp: App {
     var body: some Scene {
         WindowGroup {
             IOSRootView()

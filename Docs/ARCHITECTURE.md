@@ -5,7 +5,7 @@
 - `Apps/iOSApp`: iOS viewer scaffold and lifecycle
 - `Shared`: shared app-facing models/services
 - `Core`: domain primitives for compile, parsing, and document state
-- `Package.swift`: builds `Core`, `Shared`, and executable `LaTeXCockpitMac`
+- `Package.swift`: builds `Core`, `Shared`, and executable `raagtex`
 
 ## Current State
 V1 baseline is implemented for local macOS workflows:
