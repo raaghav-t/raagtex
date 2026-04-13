@@ -118,7 +118,7 @@ public struct LatexmkCompileRunner: CompileRunning {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
         process.currentDirectoryURL = request.projectRoot
-        process.arguments = [
+        var arguments = [
             "latexmk",
             request.engine.latexmkFlag,
             "-interaction=nonstopmode",
@@ -126,6 +126,10 @@ public struct LatexmkCompileRunner: CompileRunning {
             "-synctex=1",
             request.mainFileRelativePath
         ]
+        if request.autoCompile == false {
+            arguments.insert("-g", at: 2)
+        }
+        process.arguments = arguments
 
         let outputPipe = Pipe()
         process.standardOutput = outputPipe

@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Raagtex | Native LaTeX Cockpit</title>
+  <meta name="description" content="Raagtex is a calm, native Apple-first LaTeX cockpit for local writing, compiling, and live PDF preview." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&amp;family=Sora:wght@500;700&amp;display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+
+<body>
+  <div class="bg-blobs" aria-hidden="true">
+    <div class="blob a"></div>
+    <div class="blob b"></div>
+    <div class="blob c"></div>
+  </div>
+
+  <div class="shell">
+    <aside class="nav glass">
+      <div class="logo">rg</div>
+      <div class="name">Raagtex</div>
+      <div class="muted">Native LaTeX Cockpit</div>
+      <a href="#overview">Overview</a>
+      <a href="#features">Features</a>
+      <a href="#architecture">Architecture</a>
+      <a href="#roadmap">Roadmap</a>
+      <a href="https://github.com/raaghavt/raagtex" target="_blank" rel="noopener">View Repository</a>
+    </aside>
+
+    <main class="content glass">
+      <section id="overview" class="hero glass">
+        <h1>Calm, native LaTeX workflow on macOS.</h1>
+        <p>
+          Raagtex keeps local writing, compile feedback, and PDF output in one elegant workspace.
+          It is built for researchers and technical writers who want focus, speed, and native Apple feel.
+        </p>
+        <div class="kpis">
+          <div class="kpi"><strong>macOS-first</strong><span>SwiftUI shell + native preview</span></div>
+          <div class="kpi"><strong>latexmk</strong><span>Fast compile loop with diagnostics</span></div>
+          <div class="kpi"><strong>Local-first</strong><span>No cloud lock-in or collaboration overhead</span></div>
+        </div>
+      </section>
+
+      <section class="grid" id="features">
+        <article class="card glass span-7">
+          <h2>What It Does Today</h2>
+          <a class="preview-link" href="#features">
+            <h3>Write + Compile + Preview</h3>
+            <p>Open a local project, edit your main <code>.tex</code> file, compile with <code>latexmk</code>, and preview PDF output live.</p>
+          </a>
+          <a class="preview-link" href="#features">
+            <h3>Focused Project Navigation</h3>
+            <p>Browse nested folders, pick <code>.tex</code> files quickly, and keep generated LaTeX noise out of the way.</p>
+          </a>
+          <a class="preview-link" href="#features">
+            <h3>Configurable Writing Experience</h3>
+            <p>Choose engine (<code>pdflatex</code>, <code>xelatex</code>, <code>lualatex</code>), layout direction, and editor command mappings.</p>
+          </a>
+        </article>
+
+        <article class="card glass span-5">
+          <h2>Core Tone</h2>
+          <span class="tag">SwiftUI-first</span>
+          <span class="tag">Apple-native feel</span>
+          <span class="tag">Restrained glass UI</span>
+          <span class="tag">Local compilation</span>
+          <span class="tag">PDF-centered flow</span>
+          <span class="tag">Auto-compile watcher</span>
+          <span class="tag">Structured diagnostics</span>
+        </article>
+
+        <article class="card glass span-5" id="architecture">
+          <h2>Architecture Snapshot</h2>
+          <ul class="clean">
+            <li><strong>Apps/MacApp:</strong> main shell, editor, compile controls, preview layout.</li>
+            <li><strong>Apps/iOSApp:</strong> companion scaffold for future live viewer flow.</li>
+            <li><strong>Core:</strong> compile runner, diagnostics parser, document state.</li>
+            <li><strong>Shared:</strong> reusable models and project/settings persistence.</li>
+          </ul>
+        </article>
+
+        <article class="card glass span-7" id="roadmap">
+          <h2>Near-Term Roadmap</h2>
+          <ul class="clean">
+            <li>Accessibility pass for keyboard focus traversal and VoiceOver.</li>
+            <li>Friendlier diagnostic grouping with source-jump hooks.</li>
+            <li>Expanded regression coverage around watcher/settings behavior.</li>
+            <li>iOS companion sync and page-change summaries in V2.</li>
+          </ul>
+        </article>
+
+        <article class="card glass span-12">
+          <h2>App Screenshots</h2>
+          <div class="shots-grid">
+            <figure class="shot">
+              <img src="./assets/screenshots/main-shell.svg" alt="Raagtex main shell view" loading="lazy" />
+              <figcaption>Main shell</figcaption>
+            </figure>
+            <figure class="shot">
+              <img src="./assets/screenshots/editor-preview.svg" alt="Raagtex editor and PDF preview layout" loading="lazy" />
+              <figcaption>Editor + preview layout</figcaption>
+            </figure>
+            <figure class="shot">
+              <img src="./assets/screenshots/compile-diagnostics.svg" alt="Raagtex compile diagnostics panel" loading="lazy" />
+              <figcaption>Compile diagnostics</figcaption>
+            </figure>
+          </div>
+        </article>
+
+        <article class="card glass span-12">
+          <h2>Project Links</h2>
+          <p>
+            Repository: <a class="inline" href="https://github.com/raaghavt/raagtex" target="_blank" rel="noopener">github.com/raaghavt/raagtex</a><br />
+            Product spec: <a class="inline" href="../SPEC.md" target="_blank" rel="noopener">SPEC.md</a><br />
+            Architecture notes: <a class="inline" href="../Docs/ARCHITECTURE.md" target="_blank" rel="noopener">Docs/ARCHITECTURE.md</a>
+          </p>
+          <div class="footer">Last updated: April 10, 2026</div>
+        </article>
+      </section>
+    </main>
+  </div>
+
+  <script src="./script.js"></script>
+</body>
+
+</html>
