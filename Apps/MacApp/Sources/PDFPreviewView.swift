@@ -102,10 +102,16 @@ struct PDFPreviewView: NSViewRepresentable {
         }
 
         func loadDocument(from url: URL) -> PDFDocument? {
-            if let data = try? Data(contentsOf: url), let document = PDFDocument(data: data) {
-                return document
+            let values = try? url.resourceValues(forKeys: [.isRegularFileKey, .fileSizeKey])
+            guard values?.isRegularFile == true else { return nil }
+            guard let size = values?.fileSize, size > 0 else { return nil }
+
+            guard let document = PDFDocument(url: url) else { return nil }
+            guard document.pageCount > 0 else { return nil }
+            if let firstPage = document.page(at: 0), firstPage.document == nil {
+                return nil
             }
-            return PDFDocument(url: url)
+            return document
         }
 
         func applyLoadedDocument(

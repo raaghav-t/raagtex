@@ -154,6 +154,10 @@ public struct LatexmkCompileRunner: CompileRunning {
         let outputPipe = Pipe()
         process.standardOutput = outputPipe
         process.standardError = outputPipe
+        let completion = DispatchSemaphore(value: 0)
+        process.terminationHandler = { _ in
+            completion.signal()
+        }
 
         do {
             try process.run()
@@ -161,8 +165,27 @@ public struct LatexmkCompileRunner: CompileRunning {
             throw CompileRunnerError.launchFailed(error.localizedDescription)
         }
 
+        let timeoutSeconds = request.autoCompile ? 45 : 120
+        let timeoutResult = completion.wait(timeout: .now() + .seconds(timeoutSeconds))
+        if timeoutResult == .timedOut {
+            if process.isRunning {
+                process.terminate()
+                _ = completion.wait(timeout: .now() + .seconds(3))
+                if process.isRunning {
+                    kill(process.processIdentifier, SIGKILL)
+                    _ = completion.wait(timeout: .now() + .seconds(1))
+                }
+            }
+            let outputData = outputPipe.fileHandleForReading.readDataToEndOfFile()
+            var rawLog = String(data: outputData, encoding: .utf8) ?? ""
+            if rawLog.isEmpty == false, rawLog.hasSuffix("\n") == false {
+                rawLog += "\n"
+            }
+            rawLog += "[raagtex] Compile timed out after \(timeoutSeconds)s and was terminated.\n"
+            throw CompileRunnerError.launchFailed(rawLog)
+        }
+
         let outputData = outputPipe.fileHandleForReading.readDataToEndOfFile()
-        process.waitUntilExit()
         let rawLog = String(data: outputData, encoding: .utf8) ?? ""
         return (process.terminationStatus, rawLog)
     }

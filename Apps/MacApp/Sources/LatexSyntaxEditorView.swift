@@ -29,8 +29,10 @@ struct LatexSyntaxEditorView: NSViewRepresentable {
         textView.isAutomaticDataDetectionEnabled = false
         textView.font = .monospacedSystemFont(ofSize: 15, weight: .regular)
         textView.allowsUndo = true
+        textView.usesFindPanel = true
+        textView.usesFindBar = true
         textView.drawsBackground = false
-        textView.textContainerInset = NSSize(width: 0, height: 8)
+        textView.textContainerInset = NSSize(width: 0, height: 3)
         textView.textContainer?.lineFragmentPadding = 0
 
         let scrollView = NSScrollView()
@@ -88,10 +90,13 @@ struct LatexSyntaxEditorView: NSViewRepresentable {
 
         private var isProgrammaticChange = false
         private var cachedSyntaxColoringEnabled = true
+        private var cachedAutoCorrectionEnabled = true
         private var cachedTheme: InterfaceTheme = .dark
         private var cachedSyntaxColors = EditorSyntaxColors.defaults(for: .dark)
         private var cachedIgnoredWords: Set<String> = []
         private var lastHandledLineJumpRequestID: UUID?
+        private var highlightWorkItem: DispatchWorkItem?
+        private var ignoredWordsWorkItem: DispatchWorkItem?
 
         init(text: Binding<String>) {
             self.text = text
@@ -129,6 +134,7 @@ struct LatexSyntaxEditorView: NSViewRepresentable {
                 cachedSyntaxColors != syntaxColors
 
             cachedSyntaxColoringEnabled = syntaxColoringEnabled
+            cachedAutoCorrectionEnabled = autocorrectionEnabled
             cachedTheme = interfaceTheme
             cachedSyntaxColors = syntaxColors
 
@@ -180,14 +186,43 @@ struct LatexSyntaxEditorView: NSViewRepresentable {
             if text.wrappedValue != textView.string {
                 text.wrappedValue = textView.string
             }
-            applyHighlighting(
-                to: textView,
-                syntaxColoringEnabled: cachedSyntaxColoringEnabled,
-                theme: cachedTheme,
-                syntaxColors: cachedSyntaxColors
-            )
             lineNumberRulerView?.invalidateLineNumbers()
-            updateIgnoredWords(in: textView, source: textView.string)
+            scheduleHighlightRefresh(for: textView)
+            scheduleIgnoredWordsRefresh(for: textView)
+        }
+
+        private func scheduleHighlightRefresh(for textView: NSTextView) {
+            guard cachedSyntaxColoringEnabled else { return }
+            highlightWorkItem?.cancel()
+            let work = DispatchWorkItem { [weak self, weak textView] in
+                guard let self, let textView else { return }
+                self.applyHighlighting(
+                    to: textView,
+                    syntaxColoringEnabled: self.cachedSyntaxColoringEnabled,
+                    theme: self.cachedTheme,
+                    syntaxColors: self.cachedSyntaxColors
+                )
+            }
+            highlightWorkItem = work
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.045, execute: work)
+        }
+
+        private func scheduleIgnoredWordsRefresh(for textView: NSTextView) {
+            if cachedAutoCorrectionEnabled == false {
+                if cachedIgnoredWords.isEmpty == false {
+                    NSSpellChecker.shared.setIgnoredWords([], inSpellDocumentWithTag: textView.spellCheckerDocumentTag)
+                    cachedIgnoredWords.removeAll()
+                }
+                return
+            }
+
+            ignoredWordsWorkItem?.cancel()
+            let work = DispatchWorkItem { [weak self, weak textView] in
+                guard let self, let textView else { return }
+                self.updateIgnoredWords(in: textView, source: textView.string)
+            }
+            ignoredWordsWorkItem = work
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.20, execute: work)
         }
 
         private func applyHighlighting(
@@ -456,6 +491,13 @@ private final class LatexTextView: NSTextView {
                 onSaveRequested()
                 return true
             }
+            if pressedKey == "f", hasShift == false {
+                showFindPanel()
+                return true
+            }
+            if hasShift == false, (pressedKey == "/" || event.keyCode == 44) {
+                return toggleCommentOnSelectedLines()
+            }
             if isReservedAppShortcut(key: pressedKey, usesShift: hasShift) {
                 return super.performKeyEquivalent(with: event)
             }
@@ -476,11 +518,18 @@ private final class LatexTextView: NSTextView {
 
     private func isReservedAppShortcut(key: String, usesShift: Bool) -> Bool {
         switch (key, usesShift) {
-        case ("s", false), ("r", false), ("o", false), ("w", false), ("w", true), ("e", true):
+        case ("s", false), ("f", false), ("g", false), ("g", true), ("r", false), ("o", false), ("w", false), ("w", true), ("e", true):
             return true
         default:
             return false
         }
+    }
+
+    private func showFindPanel() {
+        window?.makeFirstResponder(self)
+        let menuItem = NSMenuItem()
+        menuItem.tag = Int(NSFindPanelAction.showFindPanel.rawValue)
+        performFindPanelAction(menuItem)
     }
 
     private func applyShortcut(_ template: String) -> Bool {
@@ -513,6 +562,101 @@ private final class LatexTextView: NSTextView {
 
         setSelectedRange(selectionAfterInsert)
         return true
+    }
+
+    private func toggleCommentOnSelectedLines() -> Bool {
+        guard let storage = textStorage else { return false }
+        let source = storage.string as NSString
+        let selection = selectedRange()
+        let length = source.length
+        guard length > 0 else { return false }
+
+        let selectionStart = min(max(selection.location, 0), length)
+        let selectionEndLocation: Int
+        if selection.length > 0 {
+            selectionEndLocation = min(length - 1, max(selectionStart, selection.location + selection.length - 1))
+        } else {
+            selectionEndLocation = min(length - 1, selectionStart)
+        }
+
+        let firstLineRange = source.lineRange(for: NSRange(location: selectionStart, length: 0))
+        let lastLineRange = source.lineRange(for: NSRange(location: selectionEndLocation, length: 0))
+        let blockStart = firstLineRange.location
+        let blockEnd = NSMaxRange(lastLineRange)
+        let blockRange = NSRange(location: blockStart, length: blockEnd - blockStart)
+        let blockText = source.substring(with: blockRange)
+
+        let lines = blockText.components(separatedBy: "\n")
+        let nonEmptyLines = lines.filter { $0.isEmpty == false }
+        guard nonEmptyLines.isEmpty == false else { return false }
+
+        let shouldUncomment = nonEmptyLines.allSatisfy { isCommentedLine($0) }
+        let transformed = lines.map { transformLine($0, uncomment: shouldUncomment) }.joined(separator: "\n")
+
+        guard shouldChangeText(in: blockRange, replacementString: transformed) else { return false }
+        storage.replaceCharacters(in: blockRange, with: transformed)
+        didChangeText()
+
+        let transformedLength = (transformed as NSString).length
+        if selection.length > 0 {
+            setSelectedRange(NSRange(location: blockStart, length: transformedLength))
+        } else {
+            let offsetInLine = max(0, selectionStart - blockStart)
+            let originalLine = lines.first ?? ""
+            let adjustment = caretAdjustmentForToggle(
+                line: originalLine,
+                caretOffsetInLine: offsetInLine,
+                uncommenting: shouldUncomment
+            )
+            let newLocation = min(blockStart + transformedLength, max(blockStart, selectionStart + adjustment))
+            setSelectedRange(NSRange(location: newLocation, length: 0))
+        }
+
+        return true
+    }
+
+    private func isCommentedLine(_ line: String) -> Bool {
+        guard line.isEmpty == false else { return false }
+        let indentCount = line.prefix { $0 == " " || $0 == "\t" }.count
+        let remainder = line.dropFirst(indentCount)
+        return remainder.hasPrefix("%")
+    }
+
+    private func transformLine(_ line: String, uncomment: Bool) -> String {
+        guard line.isEmpty == false else { return line }
+
+        let indentCount = line.prefix { $0 == " " || $0 == "\t" }.count
+        let indent = String(line.prefix(indentCount))
+        var remainder = String(line.dropFirst(indentCount))
+
+        if uncomment {
+            guard remainder.hasPrefix("%") else { return line }
+            remainder.removeFirst()
+            if remainder.hasPrefix(" ") {
+                remainder.removeFirst()
+            }
+            return indent + remainder
+        } else {
+            return indent + "% " + remainder
+        }
+    }
+
+    private func caretAdjustmentForToggle(line: String, caretOffsetInLine: Int, uncommenting: Bool) -> Int {
+        let indentCount = line.prefix { $0 == " " || $0 == "\t" }.count
+        if uncommenting {
+            var removed = 0
+            let remainder = String(line.dropFirst(indentCount))
+            if remainder.hasPrefix("%") {
+                removed = 1
+                if remainder.dropFirst().hasPrefix(" ") {
+                    removed = 2
+                }
+            }
+            guard caretOffsetInLine > indentCount else { return 0 }
+            return -min(removed, caretOffsetInLine - indentCount)
+        } else {
+            return caretOffsetInLine > indentCount ? 2 : 0
+        }
     }
 }
 
