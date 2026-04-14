@@ -7,13 +7,14 @@ struct PDFPreviewView: NSViewRepresentable {
     var refreshToken: Date?
     var interfaceTheme: InterfaceTheme = .dark
     var onInverseSearch: ((PDFInverseSearchTarget) -> Void)? = nil
+    var onDocumentDisplayed: ((Date) -> Void)? = nil
 
     func makeCoordinator() -> Coordinator {
         Coordinator()
     }
 
     func makeNSView(context: Context) -> PDFView {
-        let view = PDFView()
+        let view = InverseSearchPDFView()
         view.autoScales = true
         view.displayMode = .singlePageContinuous
         view.displaysAsBook = false
@@ -22,6 +23,7 @@ struct PDFPreviewView: NSViewRepresentable {
         let canvasColor = canvasBackgroundColor(for: interfaceTheme)
         view.backgroundColor = canvasColor
         context.coordinator.configureInteraction(for: view, onInverseSearch: onInverseSearch)
+        context.coordinator.onDocumentDisplayed = onDocumentDisplayed
         context.coordinator.applyInternalBackgroundStyling(to: view, canvasColor: canvasColor)
         return view
     }
@@ -30,24 +32,20 @@ struct PDFPreviewView: NSViewRepresentable {
         let canvasColor = canvasBackgroundColor(for: interfaceTheme)
         nsView.backgroundColor = canvasColor
         context.coordinator.configureInteraction(for: nsView, onInverseSearch: onInverseSearch)
+        context.coordinator.onDocumentDisplayed = onDocumentDisplayed
         guard let pdfURL else {
             nsView.document = nil
             context.coordinator.lastLoadedURL = nil
-            context.coordinator.lastKnownModificationDate = nil
-            context.coordinator.lastKnownFileSize = nil
             context.coordinator.lastRefreshToken = nil
             context.coordinator.lastKnownViewState = nil
+            context.coordinator.cancelPendingRetry()
             return
         }
 
-        let resourceValues = try? pdfURL.resourceValues(forKeys: [.contentModificationDateKey, .fileSizeKey])
-        let modificationDate = resourceValues?.contentModificationDate
-        let fileSize = resourceValues?.fileSize
         let needsReload =
             context.coordinator.lastLoadedURL != pdfURL ||
-            context.coordinator.lastKnownModificationDate != modificationDate ||
-            context.coordinator.lastKnownFileSize != fileSize ||
-            context.coordinator.lastRefreshToken != refreshToken
+            context.coordinator.lastRefreshToken != refreshToken ||
+            nsView.document == nil
 
         if needsReload {
             context.coordinator.lastKnownViewState = context.coordinator.captureViewState(from: nsView)
@@ -56,8 +54,6 @@ struct PDFPreviewView: NSViewRepresentable {
                     document,
                     to: nsView,
                     loadedURL: pdfURL,
-                    modificationDate: modificationDate,
-                    fileSize: fileSize,
                     refreshToken: refreshToken,
                     canvasColor: canvasColor
                 )
@@ -65,10 +61,9 @@ struct PDFPreviewView: NSViewRepresentable {
                 context.coordinator.scheduleLoadRetry(
                     on: nsView,
                     pdfURL: pdfURL,
-                    modificationDate: modificationDate,
-                    fileSize: fileSize,
                     refreshToken: refreshToken,
-                    canvasColor: canvasColor
+                    canvasColor: canvasColor,
+                    attempt: 1
                 )
             }
         }
@@ -85,15 +80,11 @@ struct PDFPreviewView: NSViewRepresentable {
 
     final class Coordinator {
         var lastLoadedURL: URL?
-        var lastKnownModificationDate: Date?
-        var lastKnownFileSize: Int?
         var lastRefreshToken: Date?
         var lastKnownViewState: PDFViewState?
         var onInverseSearch: ((PDFInverseSearchTarget) -> Void)?
+        var onDocumentDisplayed: ((Date) -> Void)?
         private var retryLoadWorkItem: DispatchWorkItem?
-        private var retrySignature: String?
-        private weak var observedPDFView: PDFView?
-        private weak var clickRecognizer: NSClickGestureRecognizer?
 
         struct PDFViewState {
             let pageIndex: Int
@@ -102,17 +93,11 @@ struct PDFPreviewView: NSViewRepresentable {
 
         func configureInteraction(for view: PDFView, onInverseSearch: ((PDFInverseSearchTarget) -> Void)?) {
             self.onInverseSearch = onInverseSearch
-
-            if observedPDFView !== view || clickRecognizer == nil {
-                if let existingRecognizer = clickRecognizer {
-                    observedPDFView?.removeGestureRecognizer(existingRecognizer)
+            if let view = view as? InverseSearchPDFView {
+                view.onPrimaryClick = { [weak self, weak view] pointInView in
+                    guard let self, let view else { return }
+                    self.handlePDFClick(at: pointInView, in: view)
                 }
-                let recognizer = NSClickGestureRecognizer(target: self, action: #selector(handlePDFClick(_:)))
-                recognizer.buttonMask = 0x1
-                recognizer.numberOfClicksRequired = 1
-                view.addGestureRecognizer(recognizer)
-                observedPDFView = view
-                clickRecognizer = recognizer
             }
         }
 
@@ -127,58 +112,39 @@ struct PDFPreviewView: NSViewRepresentable {
             _ document: PDFDocument,
             to view: PDFView,
             loadedURL: URL,
-            modificationDate: Date?,
-            fileSize: Int?,
             refreshToken: Date?,
             canvasColor: NSColor
         ) {
             retryLoadWorkItem?.cancel()
             retryLoadWorkItem = nil
-            retrySignature = nil
 
             view.document = document
             lastLoadedURL = loadedURL
-            lastKnownModificationDate = modificationDate
-            lastKnownFileSize = fileSize
             lastRefreshToken = refreshToken
             applyInternalBackgroundStyling(to: view, canvasColor: canvasColor)
             restoreViewState(on: view)
+            onDocumentDisplayed?(Date())
         }
 
         func scheduleLoadRetry(
             on view: PDFView,
             pdfURL: URL,
-            modificationDate: Date?,
-            fileSize: Int?,
             refreshToken: Date?,
             canvasColor: NSColor,
-            attempt: Int = 1
+            attempt: Int
         ) {
-            guard attempt <= 3 else { return }
-
-            let signature = [
-                pdfURL.path,
-                String(modificationDate?.timeIntervalSince1970 ?? -1),
-                String(fileSize ?? -1),
-                String(refreshToken?.timeIntervalSince1970 ?? -1)
-            ].joined(separator: "|")
-
-            if retrySignature == signature, retryLoadWorkItem != nil {
-                return
-            }
+            guard attempt <= 20 else { return }
 
             retryLoadWorkItem?.cancel()
-            retrySignature = signature
 
             let work = DispatchWorkItem { [weak self, weak view] in
                 guard let self, let view else { return }
+                self.retryLoadWorkItem = nil
                 if let document = self.loadDocument(from: pdfURL) {
                     self.applyLoadedDocument(
                         document,
                         to: view,
                         loadedURL: pdfURL,
-                        modificationDate: modificationDate,
-                        fileSize: fileSize,
                         refreshToken: refreshToken,
                         canvasColor: canvasColor
                     )
@@ -186,8 +152,6 @@ struct PDFPreviewView: NSViewRepresentable {
                     self.scheduleLoadRetry(
                         on: view,
                         pdfURL: pdfURL,
-                        modificationDate: modificationDate,
-                        fileSize: fileSize,
                         refreshToken: refreshToken,
                         canvasColor: canvasColor,
                         attempt: attempt + 1
@@ -196,7 +160,12 @@ struct PDFPreviewView: NSViewRepresentable {
             }
 
             retryLoadWorkItem = work
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.12, execute: work)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.10, execute: work)
+        }
+
+        func cancelPendingRetry() {
+            retryLoadWorkItem?.cancel()
+            retryLoadWorkItem = nil
         }
 
         func applyInternalBackgroundStyling(to view: PDFView, canvasColor: NSColor) {
@@ -207,15 +176,11 @@ struct PDFPreviewView: NSViewRepresentable {
             }
         }
 
-        @objc
-        private func handlePDFClick(_ recognizer: NSClickGestureRecognizer) {
+        private func handlePDFClick(at pointInView: CGPoint, in view: PDFView) {
             guard
-                recognizer.state == .ended,
-                let view = observedPDFView,
                 let document = view.document
             else { return }
 
-            let pointInView = recognizer.location(in: view)
             guard let page = view.page(for: pointInView, nearest: true) else { return }
             let pagePoint = view.convert(pointInView, to: page)
             let pageIndex = document.index(for: page)
@@ -281,4 +246,15 @@ struct PDFInverseSearchTarget: Equatable {
     let pageIndex: Int
     let pagePoint: CGPoint
     let pageBounds: CGRect
+}
+
+private final class InverseSearchPDFView: PDFView {
+    var onPrimaryClick: ((CGPoint) -> Void)?
+
+    override func mouseUp(with event: NSEvent) {
+        super.mouseUp(with: event)
+        guard event.type == .leftMouseUp, event.clickCount == 1 else { return }
+        let point = convert(event.locationInWindow, from: nil)
+        onPrimaryClick?(point)
+    }
 }

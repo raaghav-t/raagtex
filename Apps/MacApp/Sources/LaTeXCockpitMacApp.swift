@@ -50,10 +50,10 @@ struct RaagtexMacApp: App {
 
             CommandGroup(replacing: .saveItem) {
                 Button("Save") {
-                    viewModel.saveEditorToDisk()
+                    viewModel.performSaveShortcut()
                 }
                 .keyboardShortcut("s", modifiers: [.command])
-                .disabled(viewModel.canSaveDocument == false || viewModel.isCompiling)
+                .disabled(viewModel.canSaveDocument == false)
             }
 
             CommandGroup(after: .saveItem) {

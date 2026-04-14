@@ -22,6 +22,9 @@ struct ViewerWindowView: View {
                         interfaceTheme: viewModel.interfaceTheme,
                         onInverseSearch: { target in
                             viewModel.handlePDFInverseSearch(target)
+                        },
+                        onDocumentDisplayed: { displayedAt in
+                            viewModel.notePDFDisplayed(at: displayedAt)
                         }
                     )
                 } else {

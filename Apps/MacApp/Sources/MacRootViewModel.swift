@@ -231,6 +231,11 @@ final class MacRootViewModel: ObservableObject {
     @Published private(set) var gitHasConflicts = false
     @Published private(set) var gitOperationInProgress = false
     @Published private(set) var hasProjectClipboardItem = false
+    @Published private(set) var debugLastSaveAt: Date?
+    @Published private(set) var debugLastCompileRequestedAt: Date?
+    @Published private(set) var debugLastCompileStartedAt: Date?
+    @Published private(set) var debugLastCompileFinishedAt: Date?
+    @Published private(set) var debugLastPDFDisplayedAt: Date?
 
     enum LogTab: String, CaseIterable {
         case diagnostics = "Diagnostics"
@@ -247,6 +252,8 @@ final class MacRootViewModel: ObservableObject {
     private var isLoadingEditorText = false
     private var gitAutoPullTimer: Timer?
     private var queuedCompileTrigger: CompileTrigger?
+    private var autoCompileSuppressedUntil = Date.distantPast
+    private var lastAutoCompileInputFingerprint = ""
     private var projectClipboardItem: ProjectFileClipboardItem? {
         didSet {
             hasProjectClipboardItem = projectClipboardItem != nil
@@ -363,7 +370,9 @@ final class MacRootViewModel: ObservableObject {
         selectedEditorTex = selectedMainTex
         documentState.projectRoot = url
         documentState.mainFileRelativePath = selectedMainTex
+        updatePreviewFromExistingPDFIfAvailable()
         refreshCompilePreflightError()
+        lastAutoCompileInputFingerprint = currentTexInputFingerprint()
 
         pushRecentProject(url)
         configureWatcher()
@@ -410,6 +419,7 @@ final class MacRootViewModel: ObservableObject {
         isLoadingEditorText = false
         hasUnsavedEditorChanges = false
         compilePreflightError = nil
+        lastAutoCompileInputFingerprint = ""
     }
 
     func exportCompiledPDF() {
@@ -548,6 +558,7 @@ final class MacRootViewModel: ObservableObject {
     }
 
     func compileNow(trigger: CompileTrigger = .manual) {
+        debugLastCompileRequestedAt = Date()
         if isCompiling {
             switch trigger {
             case .manual:
@@ -586,7 +597,11 @@ final class MacRootViewModel: ObservableObject {
             saveEditorToDisk()
         }
 
+        suppressAutoCompile(for: 1.5)
+        lastAutoCompileInputFingerprint = currentTexInputFingerprint()
+
         isCompiling = true
+        debugLastCompileStartedAt = Date()
         documentState.compileStatus = .running
         documentState.mainFileRelativePath = selectedMainTex
         bannerMessage = nil
@@ -602,6 +617,7 @@ final class MacRootViewModel: ObservableObject {
             defer {
                 Task { @MainActor in
                     self.isCompiling = false
+                    self.suppressAutoCompile(for: 0.9)
                     if let queuedTrigger = self.queuedCompileTrigger {
                         self.queuedCompileTrigger = nil
                         self.compileNow(trigger: queuedTrigger)
@@ -621,6 +637,7 @@ final class MacRootViewModel: ObservableObject {
                     self.documentState.diagnostics = result.diagnostics
                     self.documentState.lastCompileAt = result.finishedAt
                     self.documentState.pdfURL = result.pdfURL
+                    self.debugLastCompileFinishedAt = result.finishedAt
 
                     if result.status == .failed {
                         self.bannerMessage = "Compile failed. Review diagnostics."
@@ -633,6 +650,7 @@ final class MacRootViewModel: ObservableObject {
                     self.documentState.diagnostics = [
                         CompileDiagnostic(severity: .error, message: error.localizedDescription)
                     ]
+                    self.debugLastCompileFinishedAt = Date()
                     self.bannerMessage = "Compile failed: \(error.localizedDescription)"
                 }
             }
@@ -643,6 +661,7 @@ final class MacRootViewModel: ObservableObject {
         selectedMainTex = value
         selectedEditorTex = value
         documentState.mainFileRelativePath = value
+        updatePreviewFromExistingPDFIfAvailable()
         refreshCompilePreflightError()
     }
 
@@ -651,6 +670,7 @@ final class MacRootViewModel: ObservableObject {
         if texFiles.contains(value), selectedMainTex != value {
             selectedMainTex = value
             documentState.mainFileRelativePath = value
+            updatePreviewFromExistingPDFIfAvailable()
             refreshCompilePreflightError()
         }
     }
@@ -852,6 +872,8 @@ final class MacRootViewModel: ObservableObject {
         do {
             try editorText.write(to: target, atomically: false, encoding: .utf8)
             hasUnsavedEditorChanges = false
+            debugLastSaveAt = Date()
+            suppressAutoCompile(for: 0.8)
             bannerMessage = "Saved \(selectedEditorTex)"
         } catch {
             bannerMessage = "Save failed: \(error.localizedDescription)"
@@ -866,8 +888,27 @@ final class MacRootViewModel: ObservableObject {
         compileNow(trigger: .manual)
     }
 
+    func performSaveShortcut() {
+        if autoCompileEnabled {
+            saveAndRecompile()
+        } else {
+            saveEditorToDisk()
+        }
+    }
+
+    func notePDFDisplayed(at date: Date) {
+        debugLastPDFDisplayedAt = date
+    }
+
     func handlePDFInverseSearch(_ target: PDFInverseSearchTarget) {
         guard let projectRoot, let pdfURL = documentState.pdfURL else { return }
+        guard isCompiling == false else { return }
+
+        if hasSyncTeXMap(for: pdfURL) == false {
+            bannerMessage = "Generating SyncTeX map… click PDF again in a moment."
+            compileNow(trigger: .manual)
+            return
+        }
 
         Task {
             let lookupResult = await resolveSyncTeXLookup(
@@ -892,6 +933,14 @@ final class MacRootViewModel: ObservableObject {
     func clearEditorLineJumpRequest(_ id: UUID) {
         guard editorLineJumpRequest?.id == id else { return }
         editorLineJumpRequest = nil
+    }
+
+    private func hasSyncTeXMap(for pdfURL: URL) -> Bool {
+        let base = pdfURL.deletingPathExtension()
+        let compressed = base.appendingPathExtension("synctex.gz")
+        let plain = base.appendingPathExtension("synctex")
+        let fm = FileManager.default
+        return fm.fileExists(atPath: compressed.path) || fm.fileExists(atPath: plain.path)
     }
 
     func revertEditorToDisk() {
@@ -1024,12 +1073,67 @@ final class MacRootViewModel: ObservableObject {
         let work = DispatchWorkItem { [weak self] in
             Task { @MainActor in
                 guard let self, self.autoCompileEnabled else { return }
+                guard Date() >= self.autoCompileSuppressedUntil else { return }
+                let currentFingerprint = self.currentTexInputFingerprint()
+                guard currentFingerprint != self.lastAutoCompileInputFingerprint else { return }
+                self.lastAutoCompileInputFingerprint = currentFingerprint
                 self.compileNow(trigger: .automatic)
             }
         }
 
         debounceWorkItem = work
         DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + 0.6, execute: work)
+    }
+
+    private func suppressAutoCompile(for seconds: TimeInterval) {
+        let until = Date().addingTimeInterval(seconds)
+        if until > autoCompileSuppressedUntil {
+            autoCompileSuppressedUntil = until
+        }
+    }
+
+    private func currentTexInputFingerprint() -> String {
+        guard let projectRoot else { return "" }
+        var parts: [String] = []
+        parts.reserveCapacity(max(8, texFiles.count))
+
+        let sortedTexFiles = texFiles.sorted()
+        for relativePath in sortedTexFiles {
+            let fileURL = projectRoot.appending(path: relativePath)
+            let values = try? fileURL.resourceValues(forKeys: [.contentModificationDateKey, .fileSizeKey])
+            let modified = values?.contentModificationDate?.timeIntervalSince1970 ?? -1
+            let size = values?.fileSize ?? -1
+            parts.append("\(relativePath)|\(modified)|\(size)")
+        }
+
+        return parts.joined(separator: "\n")
+    }
+
+    private func updatePreviewFromExistingPDFIfAvailable() {
+        guard let projectRoot, selectedMainTex.isEmpty == false else {
+            documentState.pdfURL = nil
+            documentState.lastCompileAt = nil
+            return
+        }
+
+        let pdfURL = projectRoot
+            .appending(path: selectedMainTex)
+            .deletingPathExtension()
+            .appendingPathExtension("pdf")
+
+        guard FileManager.default.fileExists(atPath: pdfURL.path) else {
+            documentState.pdfURL = nil
+            documentState.lastCompileAt = nil
+            return
+        }
+
+        let values = try? pdfURL.resourceValues(forKeys: [.contentModificationDateKey])
+        documentState.pdfURL = pdfURL
+        if let modificationDate = values?.contentModificationDate {
+            documentState.lastCompileAt = modificationDate
+        } else if documentState.lastCompileAt == nil {
+            documentState.lastCompileAt = Date()
+        }
     }
 
     private func configureGitAutoPullTimer() {
@@ -1225,6 +1329,7 @@ final class MacRootViewModel: ObservableObject {
         }
 
         documentState.mainFileRelativePath = selectedMainTex
+        updatePreviewFromExistingPDFIfAvailable()
         refreshCompilePreflightError()
     }
 

@@ -429,11 +429,7 @@ struct MacRootView: View {
                     viewModel.clearEditorLineJumpRequest(id)
                 },
                 onSaveRequested: {
-                    if viewModel.autoCompileEnabled {
-                        viewModel.saveAndRecompile()
-                    } else {
-                        viewModel.saveEditorToDisk()
-                    }
+                    viewModel.performSaveShortcut()
                 }
             )
                 .padding(12)
@@ -470,6 +466,9 @@ struct MacRootView: View {
                 interfaceTheme: viewModel.interfaceTheme,
                 onInverseSearch: { target in
                     viewModel.handlePDFInverseSearch(target)
+                },
+                onDocumentDisplayed: { displayedAt in
+                    viewModel.notePDFDisplayed(at: displayedAt)
                 }
             )
                 .background(previewBackground)
@@ -510,6 +509,12 @@ struct MacRootView: View {
 
             Divider()
 
+            debugTimelineView
+                .padding(.horizontal, 10)
+                .padding(.vertical, 8)
+
+            Divider()
+
             Picker("Output", selection: $viewModel.selectedLogTab) {
                 ForEach(MacRootViewModel.LogTab.allCases, id: \.self) { tab in
                     Text(tab.rawValue).tag(tab)
@@ -538,6 +543,43 @@ struct MacRootView: View {
                 .allowsHitTesting(false)
         }
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+    }
+
+    private var debugTimelineView: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("Pipeline Debug")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+            debugTimelineRow("Save", viewModel.debugLastSaveAt)
+            debugTimelineRow("Compile Request", viewModel.debugLastCompileRequestedAt)
+            debugTimelineRow("Compile Start", viewModel.debugLastCompileStartedAt)
+            debugTimelineRow("Compile Finish", viewModel.debugLastCompileFinishedAt)
+            debugTimelineRow("PDF Display", viewModel.debugLastPDFDisplayedAt)
+        }
+    }
+
+    private func debugTimelineRow(_ title: String, _ date: Date?) -> some View {
+        HStack(spacing: 8) {
+            Text(title)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .frame(width: 92, alignment: .leading)
+            Text(formattedDebugDate(date))
+                .font(.caption2.monospacedDigit())
+                .foregroundStyle(.primary)
+            Spacer(minLength: 0)
+        }
+    }
+
+    private func formattedDebugDate(_ date: Date?) -> String {
+        guard let date else { return "—" }
+        return debugDateFormatter.string(from: date)
+    }
+
+    private var debugDateFormatter: DateFormatter {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "HH:mm:ss.SSS"
+        return formatter
     }
 
     private var diagnosticsList: some View {

@@ -115,9 +115,28 @@ public struct LatexmkCompileRunner: CompileRunning {
             throw CompileRunnerError.missingMainFile(request.mainFileURL)
         }
 
+        let run = try runLatexmkOnce(request)
+        let diagnostics = parser.parse(run.rawLog)
+        let status: CompileStatus = run.exitCode == 0 ? .succeeded : .failed
+        let pdfURL = FileManager.default.fileExists(atPath: request.expectedPDFURL.path) ? request.expectedPDFURL : nil
+
+        return CompileResult(
+            status: status,
+            request: request,
+            startedAt: startedAt,
+            finishedAt: Date(),
+            exitCode: run.exitCode,
+            rawLog: run.rawLog,
+            diagnostics: diagnostics,
+            pdfURL: pdfURL
+        )
+    }
+
+    private func runLatexmkOnce(_ request: CompileRequest) throws -> (exitCode: Int32, rawLog: String) {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
         process.currentDirectoryURL = request.projectRoot
+        let forceRebuildForSyncTeX = needsSyncTeXRebuild(for: request)
         var arguments = [
             "latexmk",
             "-cd",
@@ -127,7 +146,7 @@ public struct LatexmkCompileRunner: CompileRunning {
             "-synctex=1",
             request.mainFileRelativePath
         ]
-        if request.autoCompile == false {
+        if forceRebuildForSyncTeX {
             arguments.insert("-g", at: 2)
         }
         process.arguments = arguments
@@ -144,21 +163,15 @@ public struct LatexmkCompileRunner: CompileRunning {
 
         let outputData = outputPipe.fileHandleForReading.readDataToEndOfFile()
         process.waitUntilExit()
-
         let rawLog = String(data: outputData, encoding: .utf8) ?? ""
-        let diagnostics = parser.parse(rawLog)
-        let status: CompileStatus = process.terminationStatus == 0 ? .succeeded : .failed
-        let pdfURL = FileManager.default.fileExists(atPath: request.expectedPDFURL.path) ? request.expectedPDFURL : nil
+        return (process.terminationStatus, rawLog)
+    }
 
-        return CompileResult(
-            status: status,
-            request: request,
-            startedAt: startedAt,
-            finishedAt: Date(),
-            exitCode: process.terminationStatus,
-            rawLog: rawLog,
-            diagnostics: diagnostics,
-            pdfURL: pdfURL
-        )
+    private func needsSyncTeXRebuild(for request: CompileRequest) -> Bool {
+        let base = request.mainFileURL.deletingPathExtension()
+        let compressed = base.appendingPathExtension("synctex.gz")
+        let plain = base.appendingPathExtension("synctex")
+        let fm = FileManager.default
+        return fm.fileExists(atPath: compressed.path) == false && fm.fileExists(atPath: plain.path) == false
     }
 }
