@@ -1,12 +1,13 @@
 # App Screenshots
 
-Drop Raagtex screenshots into this folder and keep these filenames so the website picks them up automatically:
+Current screenshot filenames used by the website:
 
-- `main-shell.png` (or `.jpg/.webp`): Main split-view shell
-- `editor-preview.png` (or `.jpg/.webp`): Editor + PDF layout
-- `compile-diagnostics.png` (or `.jpg/.webp`): Compile diagnostics panel
+- `justLaunched.png`
+- `editorLightMode.png`
+- `editorDarkMode.png`
+- `stackedView.png`
 
-Current defaults in `Website/index.html` point to `.svg` placeholder files. Replace those files with real screenshots, or update the `src` paths to your preferred filenames.
+If you rename files, update the `src` paths in `Website/index.html`.
 
 Recommended capture size:
 - Width: 2200-2800 px

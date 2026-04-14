@@ -120,6 +120,7 @@ public struct LatexmkCompileRunner: CompileRunning {
         process.currentDirectoryURL = request.projectRoot
         var arguments = [
             "latexmk",
+            "-cd",
             request.engine.latexmkFlag,
             "-interaction=nonstopmode",
             "-file-line-error",

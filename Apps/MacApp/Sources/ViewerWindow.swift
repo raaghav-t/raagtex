@@ -18,7 +18,11 @@ struct ViewerWindowView: View {
                 if let pdfURL = viewModel.documentState.pdfURL {
                     PDFPreviewView(
                         pdfURL: pdfURL,
-                        refreshToken: viewModel.documentState.lastCompileAt
+                        refreshToken: viewModel.documentState.lastCompileAt,
+                        interfaceTheme: viewModel.interfaceTheme,
+                        onInverseSearch: { target in
+                            viewModel.handlePDFInverseSearch(target)
+                        }
                     )
                 } else {
                     ContentUnavailableView(

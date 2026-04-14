@@ -10,6 +10,8 @@ struct LatexSyntaxEditorView: NSViewRepresentable {
     var syntaxColors: EditorSyntaxColors
     var showLineNumbers: Bool
     var shortcutCommands: [EditorShortcutCommand]
+    var lineJumpRequest: EditorLineJumpRequest?
+    var onLineJumpHandled: ((UUID) -> Void)? = nil
     var onSaveRequested: (() -> Void)?
 
     func makeCoordinator() -> Coordinator {
@@ -53,6 +55,8 @@ struct LatexSyntaxEditorView: NSViewRepresentable {
             syntaxColors: syntaxColors,
             showLineNumbers: showLineNumbers,
             shortcutCommands: shortcutCommands,
+            lineJumpRequest: lineJumpRequest,
+            onLineJumpHandled: onLineJumpHandled,
             onSaveRequested: onSaveRequested,
             forceTextUpdate: true
         )
@@ -69,6 +73,8 @@ struct LatexSyntaxEditorView: NSViewRepresentable {
             syntaxColors: syntaxColors,
             showLineNumbers: showLineNumbers,
             shortcutCommands: shortcutCommands,
+            lineJumpRequest: lineJumpRequest,
+            onLineJumpHandled: onLineJumpHandled,
             onSaveRequested: onSaveRequested,
             forceTextUpdate: false
         )
@@ -85,6 +91,7 @@ struct LatexSyntaxEditorView: NSViewRepresentable {
         private var cachedTheme: InterfaceTheme = .dark
         private var cachedSyntaxColors = EditorSyntaxColors.defaults(for: .dark)
         private var cachedIgnoredWords: Set<String> = []
+        private var lastHandledLineJumpRequestID: UUID?
 
         init(text: Binding<String>) {
             self.text = text
@@ -98,6 +105,8 @@ struct LatexSyntaxEditorView: NSViewRepresentable {
             syntaxColors: EditorSyntaxColors,
             showLineNumbers: Bool,
             shortcutCommands: [EditorShortcutCommand],
+            lineJumpRequest: EditorLineJumpRequest?,
+            onLineJumpHandled: ((UUID) -> Void)?,
             onSaveRequested: (() -> Void)?,
             forceTextUpdate: Bool
         ) {
@@ -153,6 +162,14 @@ struct LatexSyntaxEditorView: NSViewRepresentable {
             } else if cachedIgnoredWords.isEmpty == false {
                 NSSpellChecker.shared.setIgnoredWords([], inSpellDocumentWithTag: textView.spellCheckerDocumentTag)
                 cachedIgnoredWords.removeAll()
+            }
+
+            if let lineJumpRequest, lineJumpRequest.id != lastHandledLineJumpRequestID {
+                jumpToLine(lineJumpRequest.line, in: textView)
+                lastHandledLineJumpRequestID = lineJumpRequest.id
+                DispatchQueue.main.async {
+                    onLineJumpHandled?(lineJumpRequest.id)
+                }
             }
         }
 
@@ -265,6 +282,36 @@ struct LatexSyntaxEditorView: NSViewRepresentable {
             }
 
             return words
+        }
+
+        private func jumpToLine(_ line: Int, in textView: NSTextView) {
+            let targetLine = max(1, line)
+            let nsText = textView.string as NSString
+            let textLength = nsText.length
+
+            guard textLength > 0 else {
+                textView.window?.makeFirstResponder(textView)
+                textView.setSelectedRange(NSRange(location: 0, length: 0))
+                return
+            }
+
+            var currentLine = 1
+            var currentLocation = 0
+            while currentLine < targetLine && currentLocation < textLength {
+                let lineRange = nsText.lineRange(for: NSRange(location: currentLocation, length: 0))
+                let nextLocation = NSMaxRange(lineRange)
+                if nextLocation <= currentLocation {
+                    break
+                }
+                currentLocation = nextLocation
+                currentLine += 1
+            }
+
+            let caretLocation = min(max(0, currentLocation), textLength)
+            let caretRange = NSRange(location: caretLocation, length: 0)
+            textView.window?.makeFirstResponder(textView)
+            textView.setSelectedRange(caretRange)
+            textView.scrollRangeToVisible(caretRange)
         }
     }
 }

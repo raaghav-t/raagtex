@@ -78,9 +78,6 @@ enum ProjectScanner {
             let relativePath = url.path.replacingOccurrences(of: projectRoot.path + "/", with: "")
             if isDirectory {
                 let childNodes = buildNodes(in: url, projectRoot: projectRoot, depth: depth + 1, maxDepth: maxDepth)
-                if childNodes.isEmpty {
-                    return nil
-                }
                 return ProjectFileNode(
                     relativePath: relativePath,
                     displayName: url.lastPathComponent,

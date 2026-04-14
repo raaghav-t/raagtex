@@ -52,30 +52,30 @@ struct MacRootView: View {
 
     private var sidebar: some View {
         List {
-            if viewModel.projectRoot != nil {
-                Section {
-                    SidebarActionRow(
-                        title: "Open Project",
-                        systemImage: "folder",
-                        disabled: false
-                    ) {
-                        viewModel.promptForProject()
-                    }
-                    .listRowBackground(Color.clear)
-
-                    SidebarActionRow(
-                        title: "Open Viewer",
-                        systemImage: "macwindow",
-                        disabled: viewModel.documentState.pdfURL == nil
-                    ) {
-                        openWindow(id: ViewerWindow.sceneID)
-                    }
-                    .listRowBackground(Color.clear)
-                } header: {
-                    Text("Workspace")
-                        .textCase(nil)
-                        .padding(.top, 10)
+            Section {
+                SidebarActionRow(
+                    title: "Open Project",
+                    systemImage: "folder",
+                    disabled: false
+                ) {
+                    viewModel.promptForProject()
                 }
+                .listRowInsets(EdgeInsets(top: 1, leading: 8, bottom: 1, trailing: 8))
+                .listRowBackground(Color.clear)
+
+                SidebarActionRow(
+                    title: "Open Viewer",
+                    systemImage: "macwindow",
+                    disabled: viewModel.documentState.pdfURL == nil
+                ) {
+                    openWindow(id: ViewerWindow.sceneID)
+                }
+                .listRowInsets(EdgeInsets(top: 1, leading: 8, bottom: 1, trailing: 8))
+                .listRowBackground(Color.clear)
+            } header: {
+                Text("Workspace")
+                    .textCase(nil)
+                    .padding(.top, 10)
             }
 
             Section {
@@ -100,18 +100,19 @@ struct MacRootView: View {
             if viewModel.recentProjects.isEmpty == false {
                 Section("Recent") {
                     ForEach(viewModel.recentProjects) { project in
-                        SidebarActionRow(
-                            title: project.name,
-                            systemImage: "folder",
-                            disabled: false
-                        ) {
-                            viewModel.openRecent(project)
-                        }
-                        .help(project.rootPath)
-                        .listRowBackground(Color.clear)
+                    SidebarActionRow(
+                        title: project.name,
+                        systemImage: "folder",
+                        disabled: false
+                    ) {
+                        viewModel.openRecent(project)
                     }
+                    .help(project.rootPath)
+                    .listRowInsets(EdgeInsets(top: 1, leading: 8, bottom: 1, trailing: 8))
+                    .listRowBackground(Color.clear)
                 }
             }
+        }
         }
         .listStyle(.sidebar)
         .scrollContentBackground(.hidden)
@@ -423,8 +424,16 @@ struct MacRootView: View {
                 syntaxColors: syntaxColors,
                 showLineNumbers: viewModel.editorLineNumbersEnabled,
                 shortcutCommands: viewModel.editorShortcutCommands,
+                lineJumpRequest: viewModel.editorLineJumpRequest,
+                onLineJumpHandled: { id in
+                    viewModel.clearEditorLineJumpRequest(id)
+                },
                 onSaveRequested: {
-                    viewModel.saveEditorToDisk()
+                    if viewModel.autoCompileEnabled {
+                        viewModel.saveAndRecompile()
+                    } else {
+                        viewModel.saveEditorToDisk()
+                    }
                 }
             )
                 .padding(12)
@@ -457,7 +466,11 @@ struct MacRootView: View {
 
             PDFPreviewView(
                 pdfURL: viewModel.documentState.pdfURL,
-                refreshToken: viewModel.documentState.lastCompileAt
+                refreshToken: viewModel.documentState.lastCompileAt,
+                interfaceTheme: viewModel.interfaceTheme,
+                onInverseSearch: { target in
+                    viewModel.handlePDFInverseSearch(target)
+                }
             )
                 .background(previewBackground)
         }
@@ -577,7 +590,7 @@ struct MacRootView: View {
     }
 
     private var activeTint: Color {
-        Color(red: 0.31, green: 0.55, blue: 0.94)
+        Color(nsColor: .controlAccentColor)
     }
 
     private var panelBackground: AnyShapeStyle {
@@ -585,9 +598,9 @@ struct MacRootView: View {
         case .clear:
             return AnyShapeStyle(Color.clear)
         case .light:
-            return AnyShapeStyle(.regularMaterial.opacity(viewModel.interfaceTransparency))
+            return AnyShapeStyle(.regularMaterial.opacity(max(0.35, viewModel.interfaceTransparency * 0.7)))
         case .dark:
-            return AnyShapeStyle(.ultraThinMaterial.opacity(viewModel.interfaceTransparency))
+            return AnyShapeStyle(.thinMaterial.opacity(max(0.30, viewModel.interfaceTransparency * 0.65)))
         }
     }
 
@@ -596,9 +609,9 @@ struct MacRootView: View {
         case .clear:
             return AnyShapeStyle(Color.clear)
         case .light:
-            return AnyShapeStyle(.regularMaterial.opacity(max(0.30, viewModel.interfaceTransparency * 0.82)))
+            return AnyShapeStyle(.regularMaterial.opacity(max(0.28, viewModel.interfaceTransparency * 0.58)))
         case .dark:
-            return AnyShapeStyle(.thinMaterial.opacity(max(0.34, viewModel.interfaceTransparency * 0.9)))
+            return AnyShapeStyle(.regularMaterial.opacity(max(0.26, viewModel.interfaceTransparency * 0.52)))
         }
     }
 
@@ -607,19 +620,14 @@ struct MacRootView: View {
         case .clear:
             return AnyShapeStyle(Color.clear)
         case .light:
-            return AnyShapeStyle(.regularMaterial.opacity(max(0.30, viewModel.interfaceTransparency * 0.8)))
+            return AnyShapeStyle(.regularMaterial.opacity(max(0.28, viewModel.interfaceTransparency * 0.56)))
         case .dark:
-            return AnyShapeStyle(.thinMaterial.opacity(max(0.34, viewModel.interfaceTransparency * 0.85)))
+            return AnyShapeStyle(.regularMaterial.opacity(max(0.26, viewModel.interfaceTransparency * 0.5)))
         }
     }
 
     private var previewBackground: Color {
-        switch viewModel.interfaceTheme {
-        case .clear:
-            return Color.clear
-        case .light, .dark:
-            return Color(nsColor: .windowBackgroundColor).opacity(0.66)
-        }
+        Color.clear
     }
 
     private var rawLogBackground: Color {
@@ -632,7 +640,7 @@ struct MacRootView: View {
     }
 
     private var strokeOpacity: Double {
-        viewModel.interfaceTheme == .clear ? 0.18 : 0.10
+        viewModel.interfaceTheme == .clear ? 0.14 : 0.07
     }
 
     private var appearanceSliderLabel: String {
@@ -677,14 +685,7 @@ struct MacRootView: View {
             .padding(.vertical, 4)
         }
 
-        if viewModel.projectRoot == nil {
-            ToolbarItem(placement: .primaryAction) {
-                Button("Open Project") {
-                    viewModel.promptForProject()
-                }
-                .buttonStyle(.borderedProminent)
-            }
-        } else {
+        if viewModel.projectRoot != nil {
             ToolbarItemGroup(placement: .primaryAction) {
                 Menu {
                     if viewModel.texFiles.isEmpty {
@@ -753,7 +754,8 @@ struct MacRootView: View {
     }
 
     private func fileTreeRow(_ node: ProjectFileNode) -> some View {
-        FileTreeRowItem(
+        let targetDirectory = node.isDirectory ? node.relativePath : parentDirectoryPath(for: node.relativePath)
+        return FileTreeRowItem(
             node: node,
             isSelected: viewModel.selectedEditorTex == node.relativePath,
             activeTint: activeTint
@@ -761,6 +763,70 @@ struct MacRootView: View {
             viewModel.userSelectedEditorFile(node.relativePath)
         }
         .help(node.relativePath)
+        .contextMenu {
+            Button("Open") {
+                viewModel.openFileNode(node)
+            }
+
+            Button("Open Parent") {
+                viewModel.openParentProject(of: node)
+            }
+            .disabled(viewModel.canOpenParentProject(of: node) == false)
+
+            Button("Reveal in Finder") {
+                viewModel.revealFileNodeInFinder(node)
+            }
+
+            Divider()
+
+            Button("New Folder") {
+                viewModel.promptCreateFolder(in: targetDirectory)
+            }
+
+            Button("New File") {
+                viewModel.promptCreateFile(in: targetDirectory)
+            }
+
+            Divider()
+
+            Button("Rename…") {
+                viewModel.promptRenameFileNode(node)
+            }
+
+            Button("Duplicate") {
+                viewModel.duplicateFileNode(node)
+            }
+
+            Button("Delete", role: .destructive) {
+                viewModel.confirmDeleteFileNode(node)
+            }
+
+            Divider()
+
+            Button("Cut") {
+                viewModel.cutFileNode(node)
+            }
+
+            Button("Copy") {
+                viewModel.copyFileNode(node)
+            }
+
+            Button("Paste") {
+                viewModel.pasteIntoDirectory(targetDirectory)
+            }
+            .disabled(viewModel.canPasteIntoDirectory(targetDirectory) == false)
+
+            Divider()
+
+            Button("Copy Path") {
+                viewModel.copyFileNodePath(node)
+            }
+        }
+    }
+
+    private func parentDirectoryPath(for relativePath: String) -> String {
+        let parent = (relativePath as NSString).deletingLastPathComponent
+        return parent == "." ? "" : parent
     }
 
     private func fileTreeBranch(_ node: ProjectFileNode) -> AnyView {
@@ -871,10 +937,6 @@ private struct SidebarActionRow: View {
     let action: () -> Void
     @State private var isHovered = false
 
-    private var rowTint: Color {
-        Color(red: 0.31, green: 0.55, blue: 0.94)
-    }
-
     var body: some View {
         Button(action: action) {
             HStack(spacing: 8) {
@@ -889,11 +951,12 @@ private struct SidebarActionRow: View {
             .padding(.vertical, 6)
             .background(
                 RoundedRectangle(cornerRadius: 7, style: .continuous)
-                    .fill(isHovered && disabled == false ? rowTint.opacity(0.16) : Color.clear)
+                    .fill(isHovered && disabled == false ? Color.primary.opacity(0.08) : Color.clear)
             )
-            .foregroundStyle(disabled ? .secondary.opacity(0.5) : (isHovered ? rowTint : Color.primary))
+            .foregroundStyle(disabled ? .secondary.opacity(0.5) : Color.primary)
             .contentShape(Rectangle())
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .buttonStyle(.plain)
         .disabled(disabled)
         .contentShape(Rectangle())
@@ -983,7 +1046,7 @@ private struct ExperienceSettingCard<Content: View>: View {
         VStack(alignment: .leading, spacing: 8) {
             VStack(alignment: .leading, spacing: 1) {
                 Text(title)
-                    .font(.caption.weight(.semibold))
+                    .font(.caption.weight(.medium))
                 if subtitle.isEmpty == false {
                     Text(subtitle)
                         .font(.caption2)
@@ -1001,11 +1064,11 @@ private struct ExperienceSettingCard<Content: View>: View {
         .padding(.vertical, 10)
         .background {
             RoundedRectangle(cornerRadius: 11, style: .continuous)
-                .fill(.thinMaterial.opacity(0.75))
+                .fill(.regularMaterial.opacity(0.48))
         }
         .overlay {
             RoundedRectangle(cornerRadius: 11, style: .continuous)
-                .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                .stroke(Color.white.opacity(0.05), lineWidth: 1)
         }
     }
 }
@@ -1038,7 +1101,7 @@ private struct ExperienceRowLabel: View {
                     .foregroundStyle(.secondary)
             }
             Text(text)
-                .font(.callout)
+                .font(.callout.weight(.regular))
                 .lineLimit(1)
         }
     }
@@ -1048,7 +1111,7 @@ private struct ThemeModeButtons: View {
     @Binding var selection: InterfaceTheme
     @State private var hoveredTheme: InterfaceTheme?
 
-    private let activeTint = Color(red: 0.31, green: 0.55, blue: 0.94)
+    private let activeTint = Color(nsColor: .controlAccentColor)
 
     var body: some View {
         HStack(spacing: 6) {
@@ -1060,11 +1123,11 @@ private struct ThemeModeButtons: View {
         .padding(.vertical, 6)
         .background(
             Capsule(style: .continuous)
-                .fill(Color.primary.opacity(0.07))
+                .fill(Color(nsColor: .controlBackgroundColor).opacity(0.7))
         )
         .overlay {
             Capsule(style: .continuous)
-                .stroke(Color.primary.opacity(0.12), lineWidth: 1)
+                .stroke(Color.primary.opacity(0.08), lineWidth: 1)
         }
     }
 
@@ -1076,7 +1139,7 @@ private struct ThemeModeButtons: View {
             }
         }
         .buttonStyle(.plain)
-        .font(.caption.weight(.semibold))
+        .font(.caption.weight(.medium))
         .frame(maxWidth: .infinity)
         .padding(.vertical, 7)
         .padding(.horizontal, 10)
@@ -1097,20 +1160,20 @@ private struct ThemeModeButtons: View {
 
     private func backgroundColor(for theme: InterfaceTheme) -> Color {
         if selection == theme {
-            return activeTint.opacity(0.20)
+            return activeTint.opacity(0.16)
         }
         if hoveredTheme == theme {
-            return Color.primary.opacity(0.08)
+            return Color.primary.opacity(0.06)
         }
         return .clear
     }
 
     private func borderColor(for theme: InterfaceTheme) -> Color {
         if selection == theme {
-            return activeTint.opacity(0.42)
+            return activeTint.opacity(0.24)
         }
         if hoveredTheme == theme {
-            return Color.primary.opacity(0.18)
+            return Color.primary.opacity(0.14)
         }
         return .clear
     }
@@ -1164,7 +1227,7 @@ private struct LayoutArrangementButtons: View {
     @State private var hoveredLayout: EditorPreviewLayout?
 
     private let orderedLayouts: [EditorPreviewLayout] = [.leftRight, .rightLeft, .topBottom, .bottomTop, .editorOnly]
-    private let activeTint = Color(red: 0.31, green: 0.55, blue: 0.94)
+    private let activeTint = Color(nsColor: .controlAccentColor)
 
     var body: some View {
         HStack(spacing: 6) {
@@ -1176,11 +1239,11 @@ private struct LayoutArrangementButtons: View {
         .padding(.vertical, 6)
         .background(
             Capsule(style: .continuous)
-                .fill(Color.primary.opacity(0.07))
+                .fill(Color(nsColor: .controlBackgroundColor).opacity(0.7))
         )
         .overlay {
             Capsule(style: .continuous)
-                .stroke(Color.primary.opacity(0.12), lineWidth: 1)
+                .stroke(Color.primary.opacity(0.08), lineWidth: 1)
         }
     }
 
@@ -1215,20 +1278,20 @@ private struct LayoutArrangementButtons: View {
 
     private func backgroundColor(for layout: EditorPreviewLayout) -> Color {
         if selection == layout {
-            return activeTint.opacity(0.20)
+            return activeTint.opacity(0.16)
         }
         if hoveredLayout == layout {
-            return Color.primary.opacity(0.08)
+            return Color.primary.opacity(0.06)
         }
         return .clear
     }
 
     private func borderColor(for layout: EditorPreviewLayout) -> Color {
         if selection == layout {
-            return activeTint.opacity(0.42)
+            return activeTint.opacity(0.24)
         }
         if hoveredLayout == layout {
-            return Color.primary.opacity(0.18)
+            return Color.primary.opacity(0.14)
         }
         return .clear
     }
@@ -1326,9 +1389,9 @@ private struct ToolbarMenuCapsule: View {
 
     private var backgroundColor: Color {
         if isHovered {
-            return Color(nsColor: .quaternaryLabelColor).opacity(0.28)
+            return Color(nsColor: .controlBackgroundColor).opacity(0.90)
         }
-        return Color(nsColor: .quaternaryLabelColor).opacity(0.16)
+        return Color(nsColor: .controlBackgroundColor).opacity(0.78)
     }
 
     var body: some View {
@@ -1336,22 +1399,25 @@ private struct ToolbarMenuCapsule: View {
             Text(title)
                 .lineLimit(1)
                 .truncationMode(.middle)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            Spacer(minLength: 6)
             Image(systemName: "chevron.up.chevron.down")
                 .font(.caption2.weight(.semibold))
                 .foregroundStyle(.secondary)
         }
-        .font(.headline.weight(.semibold))
+        .font(.callout.weight(.medium))
         .foregroundStyle(.primary)
-        .frame(minWidth: minWidth)
-        .padding(.horizontal, 14)
-        .padding(.vertical, 7)
+        .frame(minWidth: minWidth, alignment: .leading)
+        .padding(.leading, 9)
+        .padding(.trailing, 10)
+        .padding(.vertical, 6)
         .background(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
                 .fill(backgroundColor)
         )
         .overlay {
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .stroke(Color.primary.opacity(0.08), lineWidth: 1)
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .stroke(Color.primary.opacity(0.10), lineWidth: 1)
         }
         .onHover { hover in
             guard hover != isHovered else { return }

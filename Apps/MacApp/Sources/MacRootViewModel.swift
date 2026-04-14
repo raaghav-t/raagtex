@@ -215,6 +215,7 @@ final class MacRootViewModel: ObservableObject {
             refreshCompilePreflightError()
         }
     }
+    @Published var editorLineJumpRequest: EditorLineJumpRequest?
 
     @Published private(set) var hasUnsavedEditorChanges = false
     @Published private(set) var compilePreflightError: String?
@@ -229,6 +230,7 @@ final class MacRootViewModel: ObservableObject {
     @Published private(set) var gitHasChanges = false
     @Published private(set) var gitHasConflicts = false
     @Published private(set) var gitOperationInProgress = false
+    @Published private(set) var hasProjectClipboardItem = false
 
     enum LogTab: String, CaseIterable {
         case diagnostics = "Diagnostics"
@@ -244,6 +246,12 @@ final class MacRootViewModel: ObservableObject {
     private var debounceWorkItem: DispatchWorkItem?
     private var isLoadingEditorText = false
     private var gitAutoPullTimer: Timer?
+    private var queuedCompileTrigger: CompileTrigger?
+    private var projectClipboardItem: ProjectFileClipboardItem? {
+        didSet {
+            hasProjectClipboardItem = projectClipboardItem != nil
+        }
+    }
 
     init(
         recentStore: any RecentProjectsStore = UserDefaultsRecentProjectsStore(),
@@ -540,7 +548,17 @@ final class MacRootViewModel: ObservableObject {
     }
 
     func compileNow(trigger: CompileTrigger = .manual) {
-        guard isCompiling == false else { return }
+        if isCompiling {
+            switch trigger {
+            case .manual:
+                queuedCompileTrigger = .manual
+            case .automatic:
+                if queuedCompileTrigger == nil {
+                    queuedCompileTrigger = .automatic
+                }
+            }
+            return
+        }
         guard let projectRoot else {
             bannerMessage = "Choose a LaTeX project first."
             return
@@ -581,7 +599,15 @@ final class MacRootViewModel: ObservableObject {
         )
 
         Task {
-            defer { Task { @MainActor in self.isCompiling = false } }
+            defer {
+                Task { @MainActor in
+                    self.isCompiling = false
+                    if let queuedTrigger = self.queuedCompileTrigger {
+                        self.queuedCompileTrigger = nil
+                        self.compileNow(trigger: queuedTrigger)
+                    }
+                }
+            }
 
             do {
                 let runner = compileRunner
@@ -622,6 +648,202 @@ final class MacRootViewModel: ObservableObject {
 
     func userSelectedEditorFile(_ value: String) {
         selectedEditorTex = value
+        if texFiles.contains(value), selectedMainTex != value {
+            selectedMainTex = value
+            documentState.mainFileRelativePath = value
+            refreshCompilePreflightError()
+        }
+    }
+
+    func openFileNode(_ node: ProjectFileNode) {
+        if node.isDirectory {
+            guard let directoryURL = urlForRelativePath(node.relativePath) else { return }
+            openProject(url: directoryURL)
+            return
+        }
+        if node.isTexFile {
+            userSelectedEditorFile(node.relativePath)
+            return
+        }
+        guard let fileURL = urlForRelativePath(node.relativePath) else { return }
+        NSWorkspace.shared.open(fileURL)
+    }
+
+    func openParentProject(of node: ProjectFileNode) {
+        guard let targetURL = urlForRelativePath(node.relativePath) else { return }
+        let currentDirectoryURL: URL
+        if node.isDirectory {
+            currentDirectoryURL = targetURL
+        } else {
+            currentDirectoryURL = targetURL.deletingLastPathComponent()
+        }
+        let parentURL = currentDirectoryURL.deletingLastPathComponent()
+        guard FileManager.default.fileExists(atPath: parentURL.path) else { return }
+        openProject(url: parentURL)
+    }
+
+    func canOpenParentProject(of node: ProjectFileNode) -> Bool {
+        guard let targetURL = urlForRelativePath(node.relativePath) else { return false }
+        let currentDirectoryURL = node.isDirectory ? targetURL : targetURL.deletingLastPathComponent()
+        let parentURL = currentDirectoryURL.deletingLastPathComponent()
+        return FileManager.default.fileExists(atPath: parentURL.path)
+    }
+
+    func revealFileNodeInFinder(_ node: ProjectFileNode) {
+        guard let fileURL = urlForRelativePath(node.relativePath) else { return }
+        NSWorkspace.shared.activateFileViewerSelecting([fileURL])
+    }
+
+    func copyFileNodePath(_ node: ProjectFileNode) {
+        guard let fileURL = urlForRelativePath(node.relativePath) else { return }
+        writeStringsToPasteboard([fileURL.path])
+        bannerMessage = "Copied path for \(node.displayName)"
+    }
+
+    func copyFileNode(_ node: ProjectFileNode) {
+        guard let fileURL = urlForRelativePath(node.relativePath) else { return }
+        projectClipboardItem = ProjectFileClipboardItem(relativePath: node.relativePath, mode: .copy)
+        writeURLsToPasteboard([fileURL])
+        bannerMessage = "Copied \(node.displayName)"
+    }
+
+    func cutFileNode(_ node: ProjectFileNode) {
+        guard let fileURL = urlForRelativePath(node.relativePath) else { return }
+        projectClipboardItem = ProjectFileClipboardItem(relativePath: node.relativePath, mode: .cut)
+        writeURLsToPasteboard([fileURL])
+        bannerMessage = "Cut \(node.displayName)"
+    }
+
+    func canPasteIntoDirectory(_ relativeDirectoryPath: String) -> Bool {
+        guard let projectRoot else { return false }
+        guard let item = projectClipboardItem else { return false }
+        guard let sourceURL = urlForRelativePath(item.relativePath) else { return false }
+        guard FileManager.default.fileExists(atPath: sourceURL.path) else { return false }
+        guard let destinationDirectoryURL = directoryURL(forRelativePath: relativeDirectoryPath) else { return false }
+        guard destinationDirectoryURL.path.hasPrefix(projectRoot.path) else { return false }
+
+        if item.mode == .cut {
+            if let sourceIsDirectory = try? sourceURL.resourceValues(forKeys: [.isDirectoryKey]).isDirectory,
+               sourceIsDirectory == true
+            {
+                let normalizedSource = sourceURL.standardizedFileURL.path
+                let normalizedDestination = destinationDirectoryURL.standardizedFileURL.path
+                if normalizedDestination == normalizedSource || normalizedDestination.hasPrefix(normalizedSource + "/") {
+                    return false
+                }
+            }
+        }
+
+        return true
+    }
+
+    func pasteIntoDirectory(_ relativeDirectoryPath: String) {
+        guard canPasteIntoDirectory(relativeDirectoryPath) else { return }
+        guard let item = projectClipboardItem else { return }
+        guard let sourceURL = urlForRelativePath(item.relativePath) else { return }
+        guard let destinationDirectoryURL = directoryURL(forRelativePath: relativeDirectoryPath) else { return }
+
+        let fm = FileManager.default
+        let destinationURL = uniqueDestinationURL(
+            in: destinationDirectoryURL,
+            preferredName: sourceURL.lastPathComponent
+        )
+
+        do {
+            switch item.mode {
+            case .copy:
+                try fm.copyItem(at: sourceURL, to: destinationURL)
+                bannerMessage = "Pasted \(destinationURL.lastPathComponent)"
+            case .cut:
+                try fm.moveItem(at: sourceURL, to: destinationURL)
+                remapPaths(afterMovingFrom: item.relativePath, to: relativePath(for: destinationURL))
+                projectClipboardItem = nil
+                bannerMessage = "Moved to \(destinationURL.lastPathComponent)"
+            }
+            refreshProjectFilesAndSelections()
+        } catch {
+            bannerMessage = "Paste failed: \(error.localizedDescription)"
+        }
+    }
+
+    func promptRenameFileNode(_ node: ProjectFileNode) {
+        let alert = NSAlert()
+        alert.messageText = "Rename \"\(node.displayName)\""
+        alert.informativeText = "Enter a new name."
+        alert.addButton(withTitle: "Rename")
+        alert.addButton(withTitle: "Cancel")
+
+        let field = NSTextField(frame: NSRect(x: 0, y: 0, width: 300, height: 24))
+        field.stringValue = node.displayName
+        alert.accessoryView = field
+
+        let response = alert.runModal()
+        guard response == .alertFirstButtonReturn else { return }
+
+        let proposedName = field.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        renameFileNode(node, to: proposedName)
+    }
+
+    func duplicateFileNode(_ node: ProjectFileNode) {
+        guard let sourceURL = urlForRelativePath(node.relativePath) else { return }
+        let destinationDirectoryURL = sourceURL.deletingLastPathComponent()
+        let destinationURL = uniqueDestinationURL(
+            in: destinationDirectoryURL,
+            preferredName: sourceURL.lastPathComponent
+        )
+
+        do {
+            try FileManager.default.copyItem(at: sourceURL, to: destinationURL)
+            refreshProjectFilesAndSelections()
+            bannerMessage = "Duplicated \(node.displayName)"
+        } catch {
+            bannerMessage = "Duplicate failed: \(error.localizedDescription)"
+        }
+    }
+
+    func confirmDeleteFileNode(_ node: ProjectFileNode) {
+        let alert = NSAlert()
+        alert.alertStyle = .warning
+        alert.messageText = "Delete \"\(node.displayName)\"?"
+        alert.informativeText = "This moves the item to Trash."
+        alert.addButton(withTitle: "Delete")
+        alert.addButton(withTitle: "Cancel")
+
+        let response = alert.runModal()
+        guard response == .alertFirstButtonReturn else { return }
+        deleteFileNode(node)
+    }
+
+    func promptCreateFolder(in relativeDirectoryPath: String) {
+        let alert = NSAlert()
+        alert.messageText = "New Folder"
+        alert.informativeText = "Enter a folder name."
+        alert.addButton(withTitle: "Create")
+        alert.addButton(withTitle: "Cancel")
+
+        let field = NSTextField(frame: NSRect(x: 0, y: 0, width: 300, height: 24))
+        field.placeholderString = "New Folder"
+        alert.accessoryView = field
+
+        let response = alert.runModal()
+        guard response == .alertFirstButtonReturn else { return }
+        createFolder(named: field.stringValue, in: relativeDirectoryPath)
+    }
+
+    func promptCreateFile(in relativeDirectoryPath: String) {
+        let alert = NSAlert()
+        alert.messageText = "New File"
+        alert.informativeText = "Enter a file name (for example, notes.tex)."
+        alert.addButton(withTitle: "Create")
+        alert.addButton(withTitle: "Cancel")
+
+        let field = NSTextField(frame: NSRect(x: 0, y: 0, width: 300, height: 24))
+        field.stringValue = "untitled.tex"
+        alert.accessoryView = field
+
+        let response = alert.runModal()
+        guard response == .alertFirstButtonReturn else { return }
+        createFile(named: field.stringValue, in: relativeDirectoryPath)
     }
 
     func saveEditorToDisk() {
@@ -642,6 +864,34 @@ final class MacRootViewModel: ObservableObject {
             guard hasUnsavedEditorChanges == false else { return }
         }
         compileNow(trigger: .manual)
+    }
+
+    func handlePDFInverseSearch(_ target: PDFInverseSearchTarget) {
+        guard let projectRoot, let pdfURL = documentState.pdfURL else { return }
+
+        Task {
+            let lookupResult = await resolveSyncTeXLookup(
+                target: target,
+                pdfURL: pdfURL,
+                projectRoot: projectRoot
+            )
+            guard let lookupResult else { return }
+
+            await MainActor.run {
+                let relativePath = resolveRelativePath(for: lookupResult.inputPath, projectRoot: projectRoot)
+                guard let relativePath else { return }
+
+                if selectedEditorTex != relativePath {
+                    selectedEditorTex = relativePath
+                }
+                editorLineJumpRequest = EditorLineJumpRequest(id: UUID(), line: max(1, lookupResult.line))
+            }
+        }
+    }
+
+    func clearEditorLineJumpRequest(_ id: UUID) {
+        guard editorLineJumpRequest?.id == id else { return }
+        editorLineJumpRequest = nil
     }
 
     func revertEditorToDisk() {
@@ -856,6 +1106,255 @@ final class MacRootViewModel: ObservableObject {
         }
     }
 
+    private func renameFileNode(_ node: ProjectFileNode, to proposedName: String) {
+        let name = proposedName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard name.isEmpty == false else {
+            bannerMessage = "Rename cancelled: name cannot be empty."
+            return
+        }
+        guard name.contains("/") == false else {
+            bannerMessage = "Rename failed: names cannot contain '/'."
+            return
+        }
+        guard let sourceURL = urlForRelativePath(node.relativePath) else { return }
+
+        let destinationURL = sourceURL.deletingLastPathComponent().appendingPathComponent(name, isDirectory: node.isDirectory)
+        guard destinationURL.path != sourceURL.path else { return }
+        if FileManager.default.fileExists(atPath: destinationURL.path) {
+            bannerMessage = "Rename failed: \(name) already exists."
+            return
+        }
+
+        do {
+            try FileManager.default.moveItem(at: sourceURL, to: destinationURL)
+            remapPaths(afterMovingFrom: node.relativePath, to: relativePath(for: destinationURL))
+            refreshProjectFilesAndSelections()
+            bannerMessage = "Renamed to \(name)"
+        } catch {
+            bannerMessage = "Rename failed: \(error.localizedDescription)"
+        }
+    }
+
+    private func deleteFileNode(_ node: ProjectFileNode) {
+        guard let sourceURL = urlForRelativePath(node.relativePath) else { return }
+        do {
+            var trashURL: NSURL?
+            try FileManager.default.trashItem(at: sourceURL, resultingItemURL: &trashURL)
+            clearSelectionsIfInside(node.relativePath)
+            if let clipboard = projectClipboardItem, pathIsEqualOrChild(clipboard.relativePath, prefix: node.relativePath) {
+                projectClipboardItem = nil
+            }
+            refreshProjectFilesAndSelections()
+            bannerMessage = "Deleted \(node.displayName)"
+        } catch {
+            bannerMessage = "Delete failed: \(error.localizedDescription)"
+        }
+    }
+
+    private func createFolder(named proposedName: String, in relativeDirectoryPath: String) {
+        let name = proposedName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard name.isEmpty == false else {
+            bannerMessage = "Create folder cancelled: name cannot be empty."
+            return
+        }
+        guard name.contains("/") == false else {
+            bannerMessage = "Create folder failed: names cannot contain '/'."
+            return
+        }
+        guard let directoryURL = directoryURL(forRelativePath: relativeDirectoryPath) else { return }
+        let destinationURL = directoryURL.appendingPathComponent(name, isDirectory: true)
+        guard FileManager.default.fileExists(atPath: destinationURL.path) == false else {
+            bannerMessage = "Create folder failed: \(name) already exists."
+            return
+        }
+
+        do {
+            try FileManager.default.createDirectory(at: destinationURL, withIntermediateDirectories: false)
+            refreshProjectFilesAndSelections()
+            bannerMessage = "Created folder \(name)"
+        } catch {
+            bannerMessage = "Create folder failed: \(error.localizedDescription)"
+        }
+    }
+
+    private func createFile(named proposedName: String, in relativeDirectoryPath: String) {
+        let name = proposedName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard name.isEmpty == false else {
+            bannerMessage = "Create file cancelled: name cannot be empty."
+            return
+        }
+        guard name.contains("/") == false else {
+            bannerMessage = "Create file failed: names cannot contain '/'."
+            return
+        }
+        guard let directoryURL = directoryURL(forRelativePath: relativeDirectoryPath) else { return }
+        let destinationURL = directoryURL.appendingPathComponent(name, isDirectory: false)
+        guard FileManager.default.fileExists(atPath: destinationURL.path) == false else {
+            bannerMessage = "Create file failed: \(name) already exists."
+            return
+        }
+
+        let initialContent = name.lowercased().hasSuffix(".tex") ? "% \(name)\n" : ""
+        do {
+            try initialContent.write(to: destinationURL, atomically: true, encoding: .utf8)
+            refreshProjectFilesAndSelections()
+            let createdRelativePath = relativePath(for: destinationURL)
+            if createdRelativePath.lowercased().hasSuffix(".tex") {
+                selectedEditorTex = createdRelativePath
+            }
+            bannerMessage = "Created file \(name)"
+        } catch {
+            bannerMessage = "Create file failed: \(error.localizedDescription)"
+        }
+    }
+
+    private func refreshProjectFilesAndSelections() {
+        guard let projectRoot else { return }
+        texFiles = ProjectScanner.findTexFiles(projectRoot: projectRoot)
+        projectFileTree = ProjectScanner.buildFileTree(projectRoot: projectRoot)
+
+        if selectedMainTex.isEmpty == false, texFiles.contains(selectedMainTex) == false {
+            selectedMainTex = preferredMainTexFile(from: texFiles) ?? ""
+        }
+
+        if selectedEditorTex.isEmpty == false, fileExists(forRelativePath: selectedEditorTex) == false {
+            selectedEditorTex = selectedMainTex
+        }
+        if selectedEditorTex.isEmpty, selectedMainTex.isEmpty == false {
+            selectedEditorTex = selectedMainTex
+        }
+
+        documentState.mainFileRelativePath = selectedMainTex
+        refreshCompilePreflightError()
+    }
+
+    private func remapPaths(afterMovingFrom sourceRelativePath: String, to destinationRelativePath: String) {
+        selectedMainTex = remapRelativePath(selectedMainTex, from: sourceRelativePath, to: destinationRelativePath)
+        selectedEditorTex = remapRelativePath(selectedEditorTex, from: sourceRelativePath, to: destinationRelativePath)
+        if let currentMainFile = documentState.mainFileRelativePath {
+            documentState.mainFileRelativePath = remapRelativePath(
+                currentMainFile,
+                from: sourceRelativePath,
+                to: destinationRelativePath
+            )
+        }
+
+        if let clipboard = projectClipboardItem {
+            let updatedClipboardPath = remapRelativePath(
+                clipboard.relativePath,
+                from: sourceRelativePath,
+                to: destinationRelativePath
+            )
+            projectClipboardItem = ProjectFileClipboardItem(relativePath: updatedClipboardPath, mode: clipboard.mode)
+        }
+    }
+
+    private func clearSelectionsIfInside(_ deletedRelativePath: String) {
+        if pathIsEqualOrChild(selectedMainTex, prefix: deletedRelativePath) {
+            selectedMainTex = ""
+        }
+        if pathIsEqualOrChild(selectedEditorTex, prefix: deletedRelativePath) {
+            selectedEditorTex = ""
+        }
+        if let currentMainFile = documentState.mainFileRelativePath,
+           pathIsEqualOrChild(currentMainFile, prefix: deletedRelativePath)
+        {
+            documentState.mainFileRelativePath = nil
+        }
+        if let pdfURL = documentState.pdfURL, pathIsEqualOrChild(relativePath(for: pdfURL), prefix: deletedRelativePath) {
+            documentState.pdfURL = nil
+        }
+    }
+
+    private func remapRelativePath(_ value: String, from sourcePrefix: String, to destinationPrefix: String) -> String {
+        guard value.isEmpty == false else { return value }
+        if value == sourcePrefix {
+            return destinationPrefix
+        }
+        let prefix = sourcePrefix + "/"
+        guard value.hasPrefix(prefix) else { return value }
+        let suffix = value.dropFirst(prefix.count)
+        return destinationPrefix + "/" + suffix
+    }
+
+    private func pathIsEqualOrChild(_ value: String, prefix: String) -> Bool {
+        value == prefix || value.hasPrefix(prefix + "/")
+    }
+
+    private func fileExists(forRelativePath relativePath: String) -> Bool {
+        guard let url = urlForRelativePath(relativePath) else { return false }
+        return FileManager.default.fileExists(atPath: url.path)
+    }
+
+    private func urlForRelativePath(_ relativePath: String) -> URL? {
+        guard let projectRoot else { return nil }
+        if relativePath.isEmpty {
+            return projectRoot
+        }
+        return projectRoot.appending(path: relativePath)
+    }
+
+    private func directoryURL(forRelativePath relativePath: String) -> URL? {
+        guard let candidate = urlForRelativePath(relativePath) else { return nil }
+        var isDirectory: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: candidate.path, isDirectory: &isDirectory), isDirectory.boolValue else {
+            return nil
+        }
+        return candidate
+    }
+
+    private func relativePath(for url: URL) -> String {
+        guard let projectRoot else { return url.lastPathComponent }
+        let rootPath = projectRoot.standardizedFileURL.path
+        let path = url.standardizedFileURL.path
+        if path == rootPath {
+            return ""
+        }
+        if path.hasPrefix(rootPath + "/") {
+            let index = path.index(path.startIndex, offsetBy: rootPath.count + 1)
+            return String(path[index...])
+        }
+        return url.lastPathComponent
+    }
+
+    private func uniqueDestinationURL(in directory: URL, preferredName: String) -> URL {
+        let fm = FileManager.default
+        let preferredURL = directory.appendingPathComponent(preferredName)
+        if fm.fileExists(atPath: preferredURL.path) == false {
+            return preferredURL
+        }
+
+        let base = (preferredName as NSString).deletingPathExtension
+        let ext = (preferredName as NSString).pathExtension
+        var index = 2
+        while index < 10_000 {
+            let candidateName: String
+            if ext.isEmpty {
+                candidateName = "\(base) copy \(index - 1)"
+            } else {
+                candidateName = "\(base) copy \(index - 1).\(ext)"
+            }
+            let candidateURL = directory.appendingPathComponent(candidateName)
+            if fm.fileExists(atPath: candidateURL.path) == false {
+                return candidateURL
+            }
+            index += 1
+        }
+        return directory.appendingPathComponent(UUID().uuidString + "-" + preferredName)
+    }
+
+    private func writeStringsToPasteboard(_ values: [String]) {
+        let board = NSPasteboard.general
+        board.clearContents()
+        board.writeObjects(values as [NSString])
+    }
+
+    private func writeURLsToPasteboard(_ values: [URL]) {
+        let board = NSPasteboard.general
+        board.clearContents()
+        board.writeObjects(values as [NSURL])
+    }
+
     private func performGitWork<T>(_ work: @escaping () throws -> T) async throws -> T {
         try await withCheckedThrowingContinuation { continuation in
             DispatchQueue.global(qos: .userInitiated).async {
@@ -870,6 +1369,129 @@ final class MacRootViewModel: ObservableObject {
 
     private func minimumInterfaceAmount(for theme: InterfaceTheme) -> Double {
         theme == .clear ? 0.0 : 0.25
+    }
+
+    private func resolveSyncTeXLookup(
+        target: PDFInverseSearchTarget,
+        pdfURL: URL,
+        projectRoot: URL
+    ) async -> SyncTeXLookupResult? {
+        await withCheckedContinuation { continuation in
+            DispatchQueue.global(qos: .userInitiated).async {
+                let result = Self.lookupSyncTeXSource(target: target, pdfURL: pdfURL, projectRoot: projectRoot)
+                continuation.resume(returning: result)
+            }
+        }
+    }
+
+    private func resolveRelativePath(for sourcePath: String, projectRoot: URL) -> String? {
+        let trimmedPath = sourcePath
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .trimmingCharacters(in: CharacterSet(charactersIn: "\""))
+        guard trimmedPath.isEmpty == false else { return nil }
+
+        let sourceURL: URL
+        if trimmedPath.hasPrefix("/") {
+            sourceURL = URL(fileURLWithPath: trimmedPath).standardizedFileURL
+        } else {
+            sourceURL = projectRoot.appending(path: trimmedPath).standardizedFileURL
+        }
+        let rootURL = projectRoot.standardizedFileURL
+        let rootPath = rootURL.path
+        let sourceStandardPath = sourceURL.path
+
+        if sourceStandardPath == rootPath {
+            return sourceURL.lastPathComponent
+        }
+        if sourceStandardPath.hasPrefix(rootPath + "/") {
+            let startIndex = sourceStandardPath.index(sourceStandardPath.startIndex, offsetBy: rootPath.count + 1)
+            return String(sourceStandardPath[startIndex...])
+        }
+
+        let fileName = sourceURL.lastPathComponent
+        let matches = texFiles.filter { URL(fileURLWithPath: $0).lastPathComponent == fileName }
+        if matches.count == 1 {
+            return matches[0]
+        }
+        return nil
+    }
+
+    nonisolated private static func lookupSyncTeXSource(
+        target: PDFInverseSearchTarget,
+        pdfURL: URL,
+        projectRoot: URL
+    ) -> SyncTeXLookupResult? {
+        let page = target.pageIndex + 1
+        let x = Int(target.pagePoint.x.rounded())
+        let yBottom = Int(target.pagePoint.y.rounded())
+        let yTop = Int((target.pageBounds.height - target.pagePoint.y).rounded())
+        let scale = 65_536.0 / 72.0
+        let scaledX = Int((target.pagePoint.x * scale).rounded())
+        let scaledYBottom = Int((target.pagePoint.y * scale).rounded())
+        let scaledYTop = Int(((target.pageBounds.height - target.pagePoint.y) * scale).rounded())
+
+        let coordinateCandidates: [(Int, Int)] = [
+            (x, yTop),
+            (x, yBottom),
+            (scaledX, scaledYTop),
+            (scaledX, scaledYBottom)
+        ]
+
+        for (candidateX, candidateY) in coordinateCandidates {
+            let spec = "\(page):\(max(0, candidateX)):\(max(0, candidateY)):\(pdfURL.path)"
+            guard let output = runSyncTeXEdit(specification: spec, currentDirectory: projectRoot) else {
+                continue
+            }
+            if let parsed = parseSyncTeXEditOutput(output) {
+                return parsed
+            }
+        }
+
+        return nil
+    }
+
+    nonisolated private static func runSyncTeXEdit(specification: String, currentDirectory: URL) -> String? {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+        process.arguments = ["synctex", "edit", "-o", specification]
+        process.currentDirectoryURL = currentDirectory
+
+        let pipe = Pipe()
+        process.standardOutput = pipe
+        process.standardError = pipe
+
+        do {
+            try process.run()
+        } catch {
+            return nil
+        }
+
+        let data = pipe.fileHandleForReading.readDataToEndOfFile()
+        process.waitUntilExit()
+        guard data.isEmpty == false else { return nil }
+        return String(data: data, encoding: .utf8)
+    }
+
+    nonisolated private static func parseSyncTeXEditOutput(_ output: String) -> SyncTeXLookupResult? {
+        let lines = output.split(whereSeparator: \.isNewline)
+        var pendingInputPath: String?
+
+        for rawLine in lines {
+            let line = rawLine.trimmingCharacters(in: .whitespacesAndNewlines)
+            if line.hasPrefix("Input:") {
+                let value = line.dropFirst("Input:".count).trimmingCharacters(in: .whitespaces)
+                if value.isEmpty == false {
+                    pendingInputPath = value
+                }
+            } else if line.hasPrefix("Line:") {
+                let value = line.dropFirst("Line:".count).trimmingCharacters(in: .whitespaces)
+                if let parsed = Int(value), let pendingInputPath {
+                    return SyncTeXLookupResult(inputPath: pendingInputPath, line: parsed)
+                }
+            }
+        }
+
+        return nil
     }
 
     private func loadSelectedEditorFileIntoEditor() {
@@ -972,4 +1594,24 @@ final class MacRootViewModel: ObservableObject {
 enum CompileTrigger {
     case manual
     case automatic
+}
+
+struct EditorLineJumpRequest: Equatable {
+    let id: UUID
+    let line: Int
+}
+
+private struct SyncTeXLookupResult {
+    let inputPath: String
+    let line: Int
+}
+
+private struct ProjectFileClipboardItem {
+    let relativePath: String
+    let mode: Mode
+
+    enum Mode {
+        case copy
+        case cut
+    }
 }

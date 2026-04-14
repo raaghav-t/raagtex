@@ -1,0 +1,24 @@
+{
+    "configurations": [
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:raagtex}",
+            "name": "Debug raagtex",
+            "target": "raagtex",
+            "configuration": "debug",
+            "preLaunchTask": "swift: Build Debug raagtex"
+        },
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:raagtex}",
+            "name": "Release raagtex",
+            "target": "raagtex",
+            "configuration": "release",
+            "preLaunchTask": "swift: Build Release raagtex"
+        }
+    ]
+}

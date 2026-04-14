@@ -268,7 +268,7 @@ a.inline {
 .shots-grid {
   display: grid;
   gap: 12px;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .shot {
@@ -279,11 +279,17 @@ a.inline {
   overflow: hidden;
 }
 
+.shot-media {
+  background: linear-gradient(140deg, rgba(214, 235, 255, 0.75), rgba(228, 249, 242, 0.75));
+  padding: 8px;
+}
+
 .shot img {
   width: 100%;
-  aspect-ratio: 16 / 9;
-  object-fit: cover;
+  height: auto;
+  object-fit: contain;
   display: block;
+  border-radius: 10px;
 }
 
 .shot figcaption {
