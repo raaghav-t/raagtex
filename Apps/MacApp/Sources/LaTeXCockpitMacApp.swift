@@ -77,44 +77,6 @@ struct RaagtexMacApp: App {
                 .keyboardShortcut("r", modifiers: [.command])
                 .disabled(viewModel.isCompiling || viewModel.projectRoot == nil || viewModel.compilePreflightError != nil)
             }
-
-            CommandMenu("Git") {
-                Toggle("Enable Git Helpers", isOn: $viewModel.gitHelpersEnabled)
-
-                Divider()
-
-                Button("Refresh Status") {
-                    viewModel.refreshGitStatus()
-                }
-                .disabled(viewModel.projectRoot == nil || viewModel.gitOperationInProgress)
-
-                Button("Stage All Changes") {
-                    viewModel.gitStageAll()
-                }
-                .disabled(viewModel.canUseGitTools == false || viewModel.gitOperationInProgress)
-
-                Button("Commit…") {
-                    viewModel.promptForCommit()
-                }
-                .disabled(viewModel.canCommitWithGit == false)
-
-                Divider()
-
-                Button("Pull (Rebase)") {
-                    viewModel.gitPullRebase()
-                }
-                .disabled(viewModel.canRunGitSync == false)
-
-                Button("Push") {
-                    viewModel.gitPush()
-                }
-                .disabled(viewModel.canRunGitSync == false)
-
-                Button("Sync (Pull + Push)") {
-                    viewModel.gitSync()
-                }
-                .disabled(viewModel.canRunGitSync == false)
-            }
         }
 
         WindowGroup("Viewer", id: ViewerWindow.sceneID) {

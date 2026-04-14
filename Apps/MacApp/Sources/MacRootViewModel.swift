@@ -359,8 +359,6 @@ final class MacRootViewModel: ObservableObject {
 
         pushRecentProject(url)
         configureWatcher()
-        refreshGitStatus()
-        configureGitAutoPullTimer()
 
         if autoCompileEnabled {
             compileNow(trigger: .automatic)
@@ -404,8 +402,6 @@ final class MacRootViewModel: ObservableObject {
         isLoadingEditorText = false
         hasUnsavedEditorChanges = false
         compilePreflightError = nil
-        resetGitState()
-        configureGitAutoPullTimer()
     }
 
     func exportCompiledPDF() {
@@ -635,11 +631,6 @@ final class MacRootViewModel: ObservableObject {
             try editorText.write(to: target, atomically: false, encoding: .utf8)
             hasUnsavedEditorChanges = false
             bannerMessage = "Saved \(selectedEditorTex)"
-            if gitStageOnSave && canUseGitTools {
-                gitStageAll(showBanner: false)
-            } else {
-                refreshGitStatus()
-            }
         } catch {
             bannerMessage = "Save failed: \(error.localizedDescription)"
         }
@@ -764,7 +755,6 @@ final class MacRootViewModel: ObservableObject {
             Task { @MainActor in
                 self?.refreshProjectFileTree()
                 self?.scheduleAutoCompile()
-                self?.refreshGitStatus()
             }
         }
         watcher?.start()

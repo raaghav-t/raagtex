@@ -356,77 +356,6 @@ struct MacRootView: View {
                 .padding(.top, 2)
                 .help("Choose editor/preview arrangement")
                 }
-
-            ExperienceSettingCard(title: "Git", subtitle: "Local repository workflow") {
-                ExperienceSettingRow(icon: "point.3.connected.trianglepath.dotted", label: "Enable Helpers") {
-                    Toggle("", isOn: $viewModel.gitHelpersEnabled)
-                        .toggleStyle(.switch)
-                        .labelsHidden()
-                }
-
-                Divider()
-                    .overlay(Color.white.opacity(0.08))
-
-                ExperienceSettingRow(icon: "square.stack.3d.up", label: "Stage On Save") {
-                    Toggle("", isOn: $viewModel.gitStageOnSave)
-                        .toggleStyle(.switch)
-                        .labelsHidden()
-                }
-                .opacity(viewModel.canUseGitTools ? 1.0 : 0.55)
-                .disabled(viewModel.canUseGitTools == false)
-
-                Divider()
-                    .overlay(Color.white.opacity(0.08))
-
-                ExperienceSettingRow(icon: "arrow.clockwise", label: "Auto Pull") {
-                    Toggle("", isOn: $viewModel.gitAutoPullEnabled)
-                        .toggleStyle(.switch)
-                        .labelsHidden()
-                }
-                .opacity(viewModel.canUseGitTools ? 1.0 : 0.55)
-                .disabled(viewModel.canUseGitTools == false)
-
-                Divider()
-                    .overlay(Color.white.opacity(0.08))
-
-                HStack(spacing: 10) {
-                    ExperienceRowLabel(icon: "point.bottomleft.filled.forward.to.point.topright.scurvepath", text: "Status")
-                    Spacer(minLength: 0)
-                    Text(viewModel.gitStatusSummary)
-                        .font(.caption.monospacedDigit())
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                }
-                .frame(minHeight: 26)
-
-                Divider()
-                    .overlay(Color.white.opacity(0.08))
-
-                HStack(spacing: 8) {
-                    Button("Refresh") {
-                        viewModel.refreshGitStatus()
-                    }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
-                    .disabled(viewModel.projectRoot == nil || viewModel.gitOperationInProgress)
-
-                    Button("Commit") {
-                        viewModel.promptForCommit()
-                    }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
-                    .disabled(viewModel.canCommitWithGit == false)
-
-                    Spacer(minLength: 0)
-
-                    Button("Sync") {
-                        viewModel.gitSync()
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.small)
-                    .disabled(viewModel.canRunGitSync == false)
-                }
-            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -742,14 +671,6 @@ struct MacRootView: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
-                }
-                if viewModel.canUseGitTools {
-                    Text(viewModel.gitStatusSummary)
-                        .font(.caption2.monospacedDigit())
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 3)
-                        .background(Color.primary.opacity(0.08), in: Capsule())
                 }
             }
             .padding(.horizontal, 12)
