@@ -171,6 +171,12 @@ final class MacRootViewModel: ObservableObject {
             persistSettings()
         }
     }
+    @Published var editorSyntaxColoringEnabled: Bool = true {
+        didSet {
+            guard oldValue != editorSyntaxColoringEnabled else { return }
+            persistSettings()
+        }
+    }
     @Published var editorLineNumbersEnabled: Bool = false {
         didSet {
             guard oldValue != editorLineNumbersEnabled else { return }
@@ -231,6 +237,8 @@ final class MacRootViewModel: ObservableObject {
     @Published private(set) var gitHasConflicts = false
     @Published private(set) var gitOperationInProgress = false
     @Published private(set) var hasProjectClipboardItem = false
+    @Published var showsSyntaxColorEditor = false
+    @Published var showsShortcutCommandEditor = false
     @Published private(set) var debugLastSaveAt: Date?
     @Published private(set) var debugLastCompileRequestedAt: Date?
     @Published private(set) var debugLastCompileStartedAt: Date?
@@ -339,6 +347,7 @@ final class MacRootViewModel: ObservableObject {
         interfaceTransparency = settings.interfaceTransparency
         editorPreviewLayout = settings.editorPreviewLayout
         editorAutoCorrectEnabled = settings.editorAutoCorrectEnabled
+        editorSyntaxColoringEnabled = settings.editorSyntaxColoringEnabled
         editorLineNumbersEnabled = settings.editorLineNumbersEnabled
         editorShortcutCommands = settings.editorShortcutCommands.isEmpty ? EditorShortcutCommand.defaultCommands : settings.editorShortcutCommands
         gitHelpersEnabled = settings.gitHelpersEnabled
@@ -420,6 +429,8 @@ final class MacRootViewModel: ObservableObject {
         hasUnsavedEditorChanges = false
         compilePreflightError = nil
         lastAutoCompileInputFingerprint = ""
+        showsSyntaxColorEditor = false
+        showsShortcutCommandEditor = false
     }
 
     func exportCompiledPDF() {
@@ -980,6 +991,24 @@ final class MacRootViewModel: ObservableObject {
         bannerMessage = nil
     }
 
+    func adjustInterfaceTransparency(by amount: Double) {
+        interfaceTransparency += amount
+    }
+
+    func setInterfaceTransparencyPreset(_ amount: Double) {
+        interfaceTransparency = amount
+    }
+
+    func presentSyntaxColorEditor() {
+        showsShortcutCommandEditor = false
+        showsSyntaxColorEditor = true
+    }
+
+    func presentShortcutCommandEditor() {
+        showsSyntaxColorEditor = false
+        showsShortcutCommandEditor = true
+    }
+
     var selectedEditorFileURL: URL? {
         guard let projectRoot, selectedEditorTex.isEmpty == false else { return nil }
         return projectRoot.appending(path: selectedEditorTex)
@@ -1022,6 +1051,7 @@ final class MacRootViewModel: ObservableObject {
             interfaceTransparency: interfaceTransparency,
             editorPreviewLayout: editorPreviewLayout,
             editorAutoCorrectEnabled: editorAutoCorrectEnabled,
+            editorSyntaxColoringEnabled: editorSyntaxColoringEnabled,
             editorLineNumbersEnabled: editorLineNumbersEnabled,
             customPalette: CustomThemePalette(accentRed: accentRed, accentGreen: accentGreen, accentBlue: accentBlue),
             gitHelpersEnabled: gitHelpersEnabled,

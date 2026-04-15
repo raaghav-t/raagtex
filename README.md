@@ -7,6 +7,7 @@ Functional macOS-first baseline with compile pipeline, built-in editor, PDF prev
 
 ## Implemented Baseline
 - macOS SwiftUI shell with split-view navigation
+- Multiple independent workspace windows (open different projects side-by-side)
 - Open local project folders and discover `.tex` files
 - Sidebar file explorer with nested project folders/files, quick `.tex` selection, and hidden LaTeX-generated supplementary artifacts
 - Built-in editor for the selected main `.tex` file (save/revert + optional typo AutoCorrect, with `Cmd+S` save-only)

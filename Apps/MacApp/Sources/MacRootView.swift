@@ -6,11 +6,9 @@ import SwiftUI
 struct MacRootView: View {
     @EnvironmentObject private var viewModel: MacRootViewModel
     @Environment(\.openWindow) private var openWindow
-    @State private var syntaxColoringEnabled = true
+    let windowID: UUID
     @State private var syntaxColors = EditorSyntaxColors.defaults(for: .dark)
     @State private var syntaxColorsCustomized = false
-    @State private var showsSyntaxColorEditor = false
-    @State private var showsCommandEditor = false
     @State private var isSyntaxGlyphHovered = false
     @State private var isCommandGlyphHovered = false
     @State private var isExperienceCollapsed = false
@@ -40,6 +38,25 @@ struct MacRootView: View {
         .background(
             WindowTransparencyConfigurator()
         )
+        .sheet(isPresented: $viewModel.showsSyntaxColorEditor) {
+            SyntaxColorEditorPopover(
+                command: syntaxCommandBinding,
+                environment: syntaxEnvironmentBinding,
+                math: syntaxMathBinding,
+                comment: syntaxCommentBinding,
+                onReset: {
+                    syntaxColors = EditorSyntaxColors.defaults(for: viewModel.interfaceTheme)
+                    syntaxColorsCustomized = false
+                }
+            )
+            .padding(8)
+            .frame(minWidth: 360)
+        }
+        .sheet(isPresented: $viewModel.showsShortcutCommandEditor) {
+            ShortcutCommandEditorPanel(commands: $viewModel.editorShortcutCommands)
+        }
+        .focusedValue(\.activeMacRootViewModel, viewModel)
+        .focusedValue(\.activeWorkspaceWindowID, windowID)
         .onAppear {
             syntaxColors = EditorSyntaxColors.defaults(for: viewModel.interfaceTheme)
         }
@@ -68,7 +85,7 @@ struct MacRootView: View {
                     systemImage: "macwindow",
                     disabled: viewModel.documentState.pdfURL == nil
                 ) {
-                    openWindow(id: ViewerWindow.sceneID)
+                    openWindow(id: ViewerWindow.sceneID, value: windowID)
                 }
                 .listRowInsets(EdgeInsets(top: 1, leading: 8, bottom: 1, trailing: 8))
                 .listRowBackground(Color.clear)
@@ -268,12 +285,12 @@ struct MacRootView: View {
 
                 HStack(spacing: 10) {
                     Button {
-                        showsSyntaxColorEditor.toggle()
+                        viewModel.presentSyntaxColorEditor()
                     } label: {
                         Image(systemName: "highlighter")
                             .font(.system(size: 12, weight: .semibold))
                             .frame(width: 16, height: 16)
-                            .foregroundStyle((isSyntaxGlyphHovered || showsSyntaxColorEditor) ? activeTint : .secondary)
+                            .foregroundStyle((isSyntaxGlyphHovered || viewModel.showsSyntaxColorEditor) ? activeTint : .secondary)
                     }
                     .buttonStyle(.plain)
                     .help("Edit syntax colors")
@@ -283,26 +300,13 @@ struct MacRootView: View {
                             isSyntaxGlyphHovered = hovering
                         }
                     }
-                    .popover(isPresented: $showsSyntaxColorEditor, arrowEdge: .trailing) {
-                        SyntaxColorEditorPopover(
-                            command: syntaxCommandBinding,
-                            environment: syntaxEnvironmentBinding,
-                            math: syntaxMathBinding,
-                            comment: syntaxCommentBinding,
-                            onReset: {
-                                syntaxColors = EditorSyntaxColors.defaults(for: viewModel.interfaceTheme)
-                                syntaxColorsCustomized = false
-                            }
-                        )
-                    }
-
                     Text("Syntax")
                         .font(.callout)
                         .lineLimit(1)
 
                     Spacer(minLength: 0)
 
-                    Toggle("", isOn: $syntaxColoringEnabled)
+                    Toggle("", isOn: $viewModel.editorSyntaxColoringEnabled)
                         .toggleStyle(.switch)
                         .labelsHidden()
                 }
@@ -323,12 +327,12 @@ struct MacRootView: View {
 
                 HStack {
                     Button {
-                        showsCommandEditor.toggle()
+                        viewModel.presentShortcutCommandEditor()
                     } label: {
                         Image(systemName: "keyboard")
                             .font(.system(size: 12, weight: .semibold))
                             .frame(width: 16, height: 16)
-                            .foregroundStyle((isCommandGlyphHovered || showsCommandEditor) ? activeTint : .secondary)
+                            .foregroundStyle((isCommandGlyphHovered || viewModel.showsShortcutCommandEditor) ? activeTint : .secondary)
                     }
                     .buttonStyle(.plain)
                     .help("Edit commands")
@@ -338,10 +342,6 @@ struct MacRootView: View {
                             isCommandGlyphHovered = hovering
                         }
                     }
-                    .popover(isPresented: $showsCommandEditor, arrowEdge: .trailing) {
-                        ShortcutCommandEditorPanel(commands: $viewModel.editorShortcutCommands)
-                    }
-
                     Text("Edit Commands")
                         .font(.callout)
                         .lineLimit(1)
@@ -419,7 +419,7 @@ struct MacRootView: View {
             LatexSyntaxEditorView(
                 text: $viewModel.editorText,
                 autocorrectionEnabled: viewModel.editorAutoCorrectEnabled,
-                syntaxColoringEnabled: syntaxColoringEnabled,
+                syntaxColoringEnabled: viewModel.editorSyntaxColoringEnabled,
                 interfaceTheme: viewModel.interfaceTheme,
                 syntaxColors: syntaxColors,
                 showLineNumbers: viewModel.editorLineNumbersEnabled,
@@ -1622,6 +1622,26 @@ private struct WindowTransparencyConfigurator: NSViewRepresentable {
 }
 
 #Preview {
-    MacRootView()
+    MacRootView(windowID: UUID())
         .environmentObject(MacRootViewModel())
+}
+
+struct ActiveMacRootViewModelKey: FocusedValueKey {
+    typealias Value = MacRootViewModel
+}
+
+struct ActiveWorkspaceWindowIDKey: FocusedValueKey {
+    typealias Value = UUID
+}
+
+extension FocusedValues {
+    var activeMacRootViewModel: MacRootViewModel? {
+        get { self[ActiveMacRootViewModelKey.self] }
+        set { self[ActiveMacRootViewModelKey.self] = newValue }
+    }
+
+    var activeWorkspaceWindowID: UUID? {
+        get { self[ActiveWorkspaceWindowIDKey.self] }
+        set { self[ActiveWorkspaceWindowIDKey.self] = newValue }
+    }
 }
