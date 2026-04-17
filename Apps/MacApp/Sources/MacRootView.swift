@@ -6,6 +6,7 @@ import SwiftUI
 struct MacRootView: View {
     @EnvironmentObject private var viewModel: MacRootViewModel
     @Environment(\.openWindow) private var openWindow
+    @Environment(\.colorScheme) private var systemColorScheme
     let windowID: UUID
     @State private var syntaxColors = EditorSyntaxColors.defaults(for: .dark)
     @State private var syntaxColorsCustomized = false
@@ -30,7 +31,7 @@ struct MacRootView: View {
             Rectangle().fill(panelBackground).ignoresSafeArea()
         }
         .background {
-            if viewModel.interfaceTheme == .clear {
+            if viewModel.interfaceTheme.isClearVariant {
                 WindowBackgroundEffectView(configuration: clearModeBackgroundEffectConfiguration)
                     .ignoresSafeArea()
             }
@@ -55,14 +56,18 @@ struct MacRootView: View {
         .sheet(isPresented: $viewModel.showsShortcutCommandEditor) {
             ShortcutCommandEditorPanel(commands: $viewModel.editorShortcutCommands)
         }
-        .focusedValue(\.activeMacRootViewModel, viewModel)
-        .focusedValue(\.activeWorkspaceWindowID, windowID)
         .onAppear {
-            syntaxColors = EditorSyntaxColors.defaults(for: viewModel.interfaceTheme)
+            syntaxColors = EditorSyntaxColors.defaults(for: effectiveInterfaceTheme)
         }
         .onChange(of: viewModel.interfaceTheme) { _, theme in
             if syntaxColorsCustomized == false {
-                syntaxColors = EditorSyntaxColors.defaults(for: theme)
+                let effectiveTheme = theme == .clear ? effectiveInterfaceTheme : theme
+                syntaxColors = EditorSyntaxColors.defaults(for: effectiveTheme)
+            }
+        }
+        .onChange(of: systemColorScheme) { _, _ in
+            if syntaxColorsCustomized == false, viewModel.interfaceTheme == .clear {
+                syntaxColors = EditorSyntaxColors.defaults(for: effectiveInterfaceTheme)
             }
         }
     }
@@ -420,7 +425,7 @@ struct MacRootView: View {
                 text: $viewModel.editorText,
                 autocorrectionEnabled: viewModel.editorAutoCorrectEnabled,
                 syntaxColoringEnabled: viewModel.editorSyntaxColoringEnabled,
-                interfaceTheme: viewModel.interfaceTheme,
+                interfaceTheme: effectiveInterfaceTheme,
                 syntaxColors: syntaxColors,
                 showLineNumbers: viewModel.editorLineNumbersEnabled,
                 shortcutCommands: viewModel.editorShortcutCommands,
@@ -463,7 +468,7 @@ struct MacRootView: View {
             PDFPreviewView(
                 pdfURL: viewModel.documentState.pdfURL,
                 refreshToken: viewModel.documentState.lastCompileAt,
-                interfaceTheme: viewModel.interfaceTheme,
+                interfaceTheme: effectiveInterfaceTheme,
                 onInverseSearch: { target in
                     viewModel.handlePDFInverseSearch(target)
                 },
@@ -622,13 +627,20 @@ struct MacRootView: View {
 
     private var preferredColorScheme: ColorScheme? {
         switch viewModel.interfaceTheme {
-        case .light:
+        case .light, .clearLight:
             return .light
-        case .dark:
+        case .dark, .clearDark:
             return .dark
         case .clear:
             return nil
         }
+    }
+
+    private var effectiveInterfaceTheme: InterfaceTheme {
+        if viewModel.interfaceTheme == .clear {
+            return systemColorScheme == .dark ? .clearDark : .clearLight
+        }
+        return viewModel.interfaceTheme
     }
 
     private var activeTint: Color {
@@ -637,7 +649,7 @@ struct MacRootView: View {
 
     private var panelBackground: AnyShapeStyle {
         switch viewModel.interfaceTheme {
-        case .clear:
+        case .clear, .clearLight, .clearDark:
             return AnyShapeStyle(Color.clear)
         case .light:
             return AnyShapeStyle(.regularMaterial.opacity(max(0.35, viewModel.interfaceTransparency * 0.7)))
@@ -648,7 +660,7 @@ struct MacRootView: View {
 
     private var cardBackground: AnyShapeStyle {
         switch viewModel.interfaceTheme {
-        case .clear:
+        case .clear, .clearLight, .clearDark:
             return AnyShapeStyle(Color.clear)
         case .light:
             return AnyShapeStyle(.regularMaterial.opacity(max(0.28, viewModel.interfaceTransparency * 0.58)))
@@ -659,7 +671,7 @@ struct MacRootView: View {
 
     private var editorPaneBackground: AnyShapeStyle {
         switch viewModel.interfaceTheme {
-        case .clear:
+        case .clear, .clearLight, .clearDark:
             return AnyShapeStyle(Color.clear)
         case .light:
             return AnyShapeStyle(.regularMaterial.opacity(max(0.28, viewModel.interfaceTransparency * 0.56)))
@@ -674,7 +686,7 @@ struct MacRootView: View {
 
     private var rawLogBackground: Color {
         switch viewModel.interfaceTheme {
-        case .clear:
+        case .clear, .clearLight, .clearDark:
             return Color.clear
         case .light, .dark:
             return Color(nsColor: .textBackgroundColor).opacity(0.62)
@@ -682,19 +694,19 @@ struct MacRootView: View {
     }
 
     private var strokeOpacity: Double {
-        viewModel.interfaceTheme == .clear ? 0.14 : 0.07
+        viewModel.interfaceTheme.isClearVariant ? 0.14 : 0.07
     }
 
     private var appearanceSliderLabel: String {
-        viewModel.interfaceTheme == .clear ? "Blur" : "Transparency"
+        viewModel.interfaceTheme.isClearVariant ? "Blur" : "Transparency"
     }
 
     private var appearanceSliderHelp: String {
-        viewModel.interfaceTheme == .clear ? "Background blur strength" : "Window transparency"
+        viewModel.interfaceTheme.isClearVariant ? "Background blur strength" : "Window transparency"
     }
 
     private var appearanceSliderRange: ClosedRange<Double> {
-        viewModel.interfaceTheme == .clear ? 0.0 ... 1.0 : 0.25 ... 1.0
+        viewModel.interfaceTheme.isClearVariant ? 0.0 ... 1.0 : 0.25 ... 1.0
     }
 
     private var clearModeBackgroundEffectConfiguration: WindowBackgroundEffectConfiguration {
@@ -1190,7 +1202,7 @@ private struct ThemeModeButtons: View {
             Capsule(style: .continuous)
                 .stroke(borderColor(for: theme), lineWidth: 1)
         }
-        .foregroundStyle(selection == theme ? Color.primary : Color.secondary)
+        .foregroundStyle(isSelected(theme) ? Color.primary : Color.secondary)
         .onHover { hovering in
             let nextValue: InterfaceTheme? = hovering ? theme : (hoveredTheme == theme ? nil : hoveredTheme)
             guard nextValue != hoveredTheme else { return }
@@ -1201,7 +1213,7 @@ private struct ThemeModeButtons: View {
     }
 
     private func backgroundColor(for theme: InterfaceTheme) -> Color {
-        if selection == theme {
+        if isSelected(theme) {
             return activeTint.opacity(0.16)
         }
         if hoveredTheme == theme {
@@ -1211,13 +1223,20 @@ private struct ThemeModeButtons: View {
     }
 
     private func borderColor(for theme: InterfaceTheme) -> Color {
-        if selection == theme {
+        if isSelected(theme) {
             return activeTint.opacity(0.24)
         }
         if hoveredTheme == theme {
             return Color.primary.opacity(0.14)
         }
         return .clear
+    }
+
+    private func isSelected(_ theme: InterfaceTheme) -> Bool {
+        if theme == .clear {
+            return selection.isClearVariant
+        }
+        return selection == theme
     }
 }
 
@@ -1624,24 +1643,4 @@ private struct WindowTransparencyConfigurator: NSViewRepresentable {
 #Preview {
     MacRootView(windowID: UUID())
         .environmentObject(MacRootViewModel())
-}
-
-struct ActiveMacRootViewModelKey: FocusedValueKey {
-    typealias Value = MacRootViewModel
-}
-
-struct ActiveWorkspaceWindowIDKey: FocusedValueKey {
-    typealias Value = UUID
-}
-
-extension FocusedValues {
-    var activeMacRootViewModel: MacRootViewModel? {
-        get { self[ActiveMacRootViewModelKey.self] }
-        set { self[ActiveMacRootViewModelKey.self] = newValue }
-    }
-
-    var activeWorkspaceWindowID: UUID? {
-        get { self[ActiveWorkspaceWindowIDKey.self] }
-        set { self[ActiveWorkspaceWindowIDKey.self] = newValue }
-    }
 }

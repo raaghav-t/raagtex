@@ -11,9 +11,14 @@ struct RaagtexMacApp: App {
     @StateObject private var sessionRegistry = WindowSessionRegistry()
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @Environment(\.openWindow) private var openWindow
-    @FocusedValue(\.activeMacRootViewModel) private var focusedViewModel
+
+    private var activeViewModel: MacRootViewModel? {
+        sessionRegistry.activeViewModel
+    }
 
     var body: some Scene {
+        let _ = sessionRegistry.commandRefreshTick
+
         WindowGroup(id: WorkspaceWindow.sceneID, for: UUID.self) { $windowID in
             WorkspaceWindowHost(windowID: $windowID)
                 .environmentObject(sessionRegistry)
@@ -22,8 +27,8 @@ struct RaagtexMacApp: App {
         .commands {
             CommandGroup(after: .newItem) {
                 Button("Open Project…") {
-                    if let focusedViewModel {
-                        focusedViewModel.promptForProject()
+                    if let activeViewModel {
+                        activeViewModel.promptForProject()
                     } else {
                         promptForProjectInNewWindow()
                     }
@@ -35,78 +40,78 @@ struct RaagtexMacApp: App {
                 }
                 .keyboardShortcut("o", modifiers: [.command, .shift])
 
-                if let focusedViewModel, focusedViewModel.recentProjects.isEmpty == false {
+                if let activeViewModel, activeViewModel.recentProjects.isEmpty == false {
                     Menu("Open Recent") {
-                        ForEach(focusedViewModel.recentProjects.prefix(10)) { project in
+                        ForEach(activeViewModel.recentProjects.prefix(10)) { project in
                             Button(project.name) {
-                                focusedViewModel.openRecent(project)
+                                activeViewModel.openRecent(project)
                             }
                         }
                     }
                 }
 
                 Button("Close Project") {
-                    focusedViewModel?.closeProject()
+                    activeViewModel?.closeProject()
                 }
                 .keyboardShortcut("w", modifiers: [.command, .shift])
-                .disabled(focusedViewModel?.projectRoot == nil)
+                .disabled(activeViewModel?.projectRoot == nil)
 
                 Divider()
 
                 Button("Reveal Project in Finder") {
-                    focusedViewModel?.openProjectInFinder()
+                    activeViewModel?.openProjectInFinder()
                 }
-                .disabled(focusedViewModel?.projectRoot == nil)
+                .disabled(activeViewModel?.projectRoot == nil)
 
                 Button("Open Project in Terminal") {
-                    focusedViewModel?.openProjectInTerminal()
+                    activeViewModel?.openProjectInTerminal()
                 }
-                .disabled(focusedViewModel?.projectRoot == nil)
+                .disabled(activeViewModel?.projectRoot == nil)
             }
 
             CommandGroup(replacing: .saveItem) {
                 Button("Save") {
-                    focusedViewModel?.performSaveShortcut()
+                    activeViewModel?.performSaveShortcut()
                 }
                 .keyboardShortcut("s", modifiers: [.command])
-                .disabled(focusedViewModel?.canSaveDocument != true)
+                .disabled(activeViewModel?.canSaveDocument != true)
             }
 
             CommandGroup(after: .saveItem) {
                 Divider()
                 Button("Export PDF…") {
-                    focusedViewModel?.exportCompiledPDF()
+                    activeViewModel?.exportCompiledPDF()
                 }
                 .keyboardShortcut("e", modifiers: [.command, .shift])
-                .disabled(focusedViewModel?.documentState.pdfURL == nil)
+                .disabled(activeViewModel?.documentState.pdfURL == nil)
 
                 Button("Reveal PDF in Finder") {
-                    focusedViewModel?.revealCompiledPDFInFinder()
+                    activeViewModel?.revealCompiledPDFInFinder()
                 }
-                .disabled(focusedViewModel?.documentState.pdfURL == nil)
+                .disabled(activeViewModel?.documentState.pdfURL == nil)
             }
 
             CommandMenu("Build") {
                 Button("Recompile") {
-                    focusedViewModel?.compileNow(trigger: .manual)
+                    activeViewModel?.compileNow(trigger: .manual)
                 }
                 .keyboardShortcut("r", modifiers: [.command])
                 .disabled(
-                    focusedViewModel == nil ||
-                    focusedViewModel?.isCompiling == true ||
-                    focusedViewModel?.projectRoot == nil ||
-                    focusedViewModel?.compilePreflightError != nil
+                    activeViewModel == nil ||
+                    activeViewModel?.isCompiling == true ||
+                    activeViewModel?.projectRoot == nil ||
+                    activeViewModel?.compilePreflightError != nil
                 )
             }
 
             CommandMenu("Experience") {
-                if let focusedViewModel {
+                if let activeViewModel {
                     Menu("Theme") {
-                        ForEach(InterfaceTheme.allCases, id: \.self) { theme in
+                        ForEach(themeMenuOptions, id: \.self) { theme in
                             Button {
-                                focusedViewModel.interfaceTheme = theme
+                                activeViewModel.interfaceTheme = theme
                             } label: {
-                                if focusedViewModel.interfaceTheme == theme {
+                                if activeViewModel.interfaceTheme == theme {
                                     Label(themeDisplayName(theme), systemImage: "checkmark")
                                 } else {
                                     Text(themeDisplayName(theme))
@@ -117,24 +122,24 @@ struct RaagtexMacApp: App {
 
                     Menu("Transparency") {
                         Button("Decrease") {
-                            focusedViewModel.adjustInterfaceTransparency(by: -0.05)
+                            activeViewModel.adjustInterfaceTransparency(by: -0.05)
                         }
                         .disabled(
-                            focusedViewModel.interfaceTransparency <= minimumTransparency(for: focusedViewModel.interfaceTheme)
+                            activeViewModel.interfaceTransparency <= minimumTransparency(for: activeViewModel.interfaceTheme)
                         )
 
                         Button("Increase") {
-                            focusedViewModel.adjustInterfaceTransparency(by: 0.05)
+                            activeViewModel.adjustInterfaceTransparency(by: 0.05)
                         }
-                        .disabled(focusedViewModel.interfaceTransparency >= 1.0)
+                        .disabled(activeViewModel.interfaceTransparency >= 1.0)
 
                         Divider()
 
                         ForEach([0.25, 0.5, 0.75, 1.0], id: \.self) { amount in
                             Button {
-                                focusedViewModel.setInterfaceTransparencyPreset(amount)
+                                activeViewModel.setInterfaceTransparencyPreset(amount)
                             } label: {
-                                if abs(focusedViewModel.interfaceTransparency - amount) < 0.001 {
+                                if abs(activeViewModel.interfaceTransparency - amount) < 0.001 {
                                     Label("\(Int(amount * 100))%", systemImage: "checkmark")
                                 } else {
                                     Text("\(Int(amount * 100))%")
@@ -145,19 +150,19 @@ struct RaagtexMacApp: App {
 
                     Divider()
 
-                    Toggle("Zen", isOn: zenModeBinding(for: focusedViewModel))
-                    Toggle("Spellcheck", isOn: boolBinding(focusedViewModel, keyPath: \.editorAutoCorrectEnabled))
-                    Toggle("Syntax", isOn: boolBinding(focusedViewModel, keyPath: \.editorSyntaxColoringEnabled))
-                    Toggle("Line Numbers", isOn: boolBinding(focusedViewModel, keyPath: \.editorLineNumbersEnabled))
+                    Toggle("Zen", isOn: zenModeBinding(for: activeViewModel))
+                    Toggle("Spellcheck", isOn: boolBinding(activeViewModel, keyPath: \.editorAutoCorrectEnabled))
+                    Toggle("Syntax", isOn: boolBinding(activeViewModel, keyPath: \.editorSyntaxColoringEnabled))
+                    Toggle("Line Numbers", isOn: boolBinding(activeViewModel, keyPath: \.editorLineNumbersEnabled))
 
                     Divider()
 
                     Button("Edit Syntax Colors…") {
-                        focusedViewModel.presentSyntaxColorEditor()
+                        activeViewModel.presentSyntaxColorEditor()
                     }
 
                     Button("Edit Commands…") {
-                        focusedViewModel.presentShortcutCommandEditor()
+                        activeViewModel.presentShortcutCommandEditor()
                     }
 
                     Divider()
@@ -165,9 +170,9 @@ struct RaagtexMacApp: App {
                     Menu("Workspace Layout") {
                         ForEach(EditorPreviewLayout.allCases, id: \.self) { layout in
                             Button {
-                                focusedViewModel.editorPreviewLayout = layout
+                                activeViewModel.editorPreviewLayout = layout
                             } label: {
-                                if focusedViewModel.editorPreviewLayout == layout {
+                                if activeViewModel.editorPreviewLayout == layout {
                                     Label(layoutDisplayName(layout), systemImage: "checkmark")
                                 } else {
                                     Text(layoutDisplayName(layout))
@@ -190,6 +195,10 @@ struct RaagtexMacApp: App {
 }
 
 private extension RaagtexMacApp {
+    var themeMenuOptions: [InterfaceTheme] {
+        [.light, .dark, .clear, .clearLight, .clearDark]
+    }
+
     func promptForProjectInNewWindow() {
         let panel = NSOpenPanel()
         panel.canChooseFiles = false
@@ -227,8 +236,12 @@ private extension RaagtexMacApp {
             return "Light"
         case .dark:
             return "Dark"
+        case .clearLight:
+            return "Clear Light"
+        case .clearDark:
+            return "Clear Dark"
         case .clear:
-            return "Clear"
+            return "Clear (Auto)"
         }
     }
 
@@ -249,7 +262,7 @@ private extension RaagtexMacApp {
 
     func minimumTransparency(for theme: InterfaceTheme) -> Double {
         switch theme {
-        case .clear:
+        case .clear, .clearLight, .clearDark:
             return 0.0
         case .light, .dark:
             return 0.25
@@ -259,8 +272,30 @@ private extension RaagtexMacApp {
 
 @MainActor
 private final class WindowSessionRegistry: ObservableObject {
+    @Published private(set) var commandRefreshTick = 0
     private var viewModelsByWindowID: [UUID: MacRootViewModel] = [:]
     private var pendingProjectByWindowID: [UUID: URL] = [:]
+    private var keyWindowObserver: NSObjectProtocol?
+
+    static let windowIdentifierPrefix = "raagtex.workspace."
+
+    init() {
+        keyWindowObserver = NotificationCenter.default.addObserver(
+            forName: NSWindow.didBecomeKeyNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in
+                self?.commandRefreshTick &+= 1
+            }
+        }
+    }
+
+    deinit {
+        if let keyWindowObserver {
+            NotificationCenter.default.removeObserver(keyWindowObserver)
+        }
+    }
 
     func prepareWindow(projectURL: URL?) -> UUID {
         let windowID = UUID()
@@ -282,6 +317,22 @@ private final class WindowSessionRegistry: ObservableObject {
         viewModelsByWindowID[windowID] = viewModel
         return viewModel
     }
+
+    var activeViewModel: MacRootViewModel? {
+        guard let activeWindowID = activeWindowID() else { return nil }
+        return viewModelsByWindowID[activeWindowID]
+    }
+
+    func windowIdentifier(for windowID: UUID) -> NSUserInterfaceItemIdentifier {
+        NSUserInterfaceItemIdentifier(Self.windowIdentifierPrefix + windowID.uuidString)
+    }
+
+    private func activeWindowID() -> UUID? {
+        guard let rawIdentifier = NSApp.keyWindow?.identifier?.rawValue else { return nil }
+        guard rawIdentifier.hasPrefix(Self.windowIdentifierPrefix) else { return nil }
+        let uuidText = String(rawIdentifier.dropFirst(Self.windowIdentifierPrefix.count))
+        return UUID(uuidString: uuidText)
+    }
 }
 
 private struct WorkspaceWindowHost: View {
@@ -296,6 +347,9 @@ private struct WorkspaceWindowHost: View {
     var body: some View {
         MacRootView(windowID: resolvedWindowID)
             .environmentObject(sessionRegistry.viewModel(for: resolvedWindowID))
+            .background {
+                WindowIdentityBinder(identifier: sessionRegistry.windowIdentifier(for: resolvedWindowID))
+            }
             .onAppear {
                 if windowID == nil {
                     windowID = generatedWindowID
@@ -312,12 +366,34 @@ private struct ViewerWindowHost: View {
         if let windowID {
             ViewerWindowView()
                 .environmentObject(sessionRegistry.viewModel(for: windowID))
+                .background {
+                    WindowIdentityBinder(identifier: sessionRegistry.windowIdentifier(for: windowID))
+                }
         } else {
             ContentUnavailableView(
                 "No Workspace",
                 systemImage: "macwindow",
                 description: Text("Open the viewer from a workspace window.")
             )
+        }
+    }
+}
+
+private struct WindowIdentityBinder: NSViewRepresentable {
+    let identifier: NSUserInterfaceItemIdentifier
+
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView()
+        DispatchQueue.main.async {
+            view.window?.identifier = identifier
+        }
+        return view
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {
+        guard let window = nsView.window else { return }
+        if window.identifier != identifier {
+            window.identifier = identifier
         }
     }
 }

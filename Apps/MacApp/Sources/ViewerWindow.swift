@@ -52,7 +52,7 @@ struct ViewerWindowView: View {
 
     private var panelBackground: AnyShapeStyle {
         switch viewModel.interfaceTheme {
-        case .clear:
+        case .clear, .clearLight, .clearDark:
             return AnyShapeStyle(Color.clear)
         case .light:
             return AnyShapeStyle(.regularMaterial.opacity(viewModel.interfaceTransparency))
@@ -63,7 +63,7 @@ struct ViewerWindowView: View {
 
     private var cardBackground: AnyShapeStyle {
         switch viewModel.interfaceTheme {
-        case .clear:
+        case .clear, .clearLight, .clearDark:
             return AnyShapeStyle(Color.clear)
         case .light:
             return AnyShapeStyle(.regularMaterial.opacity(max(0.30, viewModel.interfaceTransparency * 0.82)))
@@ -74,7 +74,7 @@ struct ViewerWindowView: View {
 
     private var previewBackground: Color {
         switch viewModel.interfaceTheme {
-        case .clear:
+        case .clear, .clearLight, .clearDark:
             return Color.clear
         case .light, .dark:
             return Color(nsColor: .windowBackgroundColor).opacity(0.66)
@@ -82,6 +82,6 @@ struct ViewerWindowView: View {
     }
 
     private var strokeOpacity: Double {
-        viewModel.interfaceTheme == .clear ? 0.18 : 0.10
+        viewModel.interfaceTheme.isClearVariant ? 0.18 : 0.10
     }
 }

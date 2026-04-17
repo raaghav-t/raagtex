@@ -1503,7 +1503,7 @@ final class MacRootViewModel: ObservableObject {
     }
 
     private func minimumInterfaceAmount(for theme: InterfaceTheme) -> Double {
-        theme == .clear ? 0.0 : 0.25
+        theme.isClearVariant ? 0.0 : 0.25
     }
 
     private func resolveSyncTeXLookup(

@@ -71,9 +71,9 @@ struct PDFPreviewView: NSViewRepresentable {
 
     private func canvasBackgroundColor(for theme: InterfaceTheme) -> NSColor {
         switch theme {
-        case .light:
+        case .light, .clearLight:
             return NSColor(white: 0.93, alpha: 1.0)
-        case .dark, .clear:
+        case .dark, .clearDark, .clear:
             return NSColor(white: 0.16, alpha: 1.0)
         }
     }

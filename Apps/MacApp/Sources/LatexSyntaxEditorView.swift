@@ -670,14 +670,14 @@ private struct SyntaxPalette {
 
     init(theme: InterfaceTheme, colors: EditorSyntaxColors) {
         switch theme {
-        case .light, .clear:
+        case .light, .clearLight:
             base = NSColor(white: 0.14, alpha: 1)
             command = NSColor(colors.command)
             environment = NSColor(colors.environment)
             math = NSColor(colors.math)
             comment = NSColor(colors.comment)
             caret = NSColor(white: 0.18, alpha: 1)
-        case .dark:
+        case .dark, .clearDark, .clear:
             base = NSColor(white: 0.90, alpha: 1)
             command = NSColor(colors.command)
             environment = NSColor(colors.environment)
@@ -696,14 +696,14 @@ struct EditorSyntaxColors: Equatable {
 
     static func defaults(for theme: InterfaceTheme) -> Self {
         switch theme {
-        case .light, .clear:
+        case .light, .clearLight:
             return .init(
                 command: Color(nsColor: NSColor(red: 0.49, green: 0.12, blue: 0.64, alpha: 1)),
                 environment: Color(nsColor: NSColor(red: 0.62, green: 0.19, blue: 0.56, alpha: 1)),
                 math: Color(nsColor: NSColor(red: 0.16, green: 0.34, blue: 0.86, alpha: 1)),
                 comment: Color(nsColor: NSColor(red: 0.20, green: 0.53, blue: 0.30, alpha: 1))
             )
-        case .dark:
+        case .dark, .clearDark, .clear:
             return .init(
                 command: Color(nsColor: NSColor(red: 0.82, green: 0.62, blue: 0.99, alpha: 1)),
                 environment: Color(nsColor: NSColor(red: 0.92, green: 0.70, blue: 0.90, alpha: 1)),

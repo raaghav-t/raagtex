@@ -22,7 +22,14 @@ public struct ProjectReference: Identifiable, Hashable, Codable, Sendable {
 public enum InterfaceTheme: String, CaseIterable, Codable, Hashable, Sendable {
     case light
     case dark
+    case clearLight
+    case clearDark
+    // Legacy value kept for backward compatibility with existing saved settings.
     case clear
+
+    public static var allCases: [InterfaceTheme] {
+        [.light, .dark, .clearLight, .clearDark]
+    }
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.singleValueContainer()
@@ -33,6 +40,10 @@ public enum InterfaceTheme: String, CaseIterable, Codable, Hashable, Sendable {
             self = .light
         case "dark":
             self = .dark
+        case "clearLight":
+            self = .clearLight
+        case "clearDark":
+            self = .clearDark
         case "clear":
             self = .clear
         case "custom":
@@ -45,6 +56,31 @@ public enum InterfaceTheme: String, CaseIterable, Codable, Hashable, Sendable {
     public func encode(to encoder: Encoder) throws {
         var container = encoder.singleValueContainer()
         try container.encode(rawValue)
+    }
+}
+
+public enum InterfaceThemeTone: Sendable {
+    case light
+    case dark
+}
+
+public extension InterfaceTheme {
+    var isClearVariant: Bool {
+        switch self {
+        case .clear, .clearLight, .clearDark:
+            return true
+        case .light, .dark:
+            return false
+        }
+    }
+
+    var tone: InterfaceThemeTone {
+        switch self {
+        case .light, .clearLight:
+            return .light
+        case .dark, .clearDark, .clear:
+            return .dark
+        }
     }
 }
 
