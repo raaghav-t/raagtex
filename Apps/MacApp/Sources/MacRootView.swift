@@ -46,7 +46,7 @@ struct MacRootView: View {
                 math: syntaxMathBinding,
                 comment: syntaxCommentBinding,
                 onReset: {
-                    syntaxColors = EditorSyntaxColors.defaults(for: viewModel.interfaceTheme)
+                    syntaxColors = EditorSyntaxColors.defaults(for: effectiveInterfaceTheme)
                     syntaxColorsCustomized = false
                 }
             )

@@ -1,4 +1,5 @@
 import AppKit
+import Shared
 import SwiftUI
 
 enum ViewerWindow {
@@ -7,6 +8,7 @@ enum ViewerWindow {
 
 struct ViewerWindowView: View {
     @EnvironmentObject private var viewModel: MacRootViewModel
+    @Environment(\.colorScheme) private var systemColorScheme
 
     var body: some View {
         ZStack {
@@ -19,7 +21,7 @@ struct ViewerWindowView: View {
                     PDFPreviewView(
                         pdfURL: pdfURL,
                         refreshToken: viewModel.documentState.lastCompileAt,
-                        interfaceTheme: viewModel.interfaceTheme,
+                        interfaceTheme: effectiveInterfaceTheme,
                         onInverseSearch: { target in
                             viewModel.handlePDFInverseSearch(target)
                         },
@@ -83,5 +85,12 @@ struct ViewerWindowView: View {
 
     private var strokeOpacity: Double {
         viewModel.interfaceTheme.isClearVariant ? 0.18 : 0.10
+    }
+
+    private var effectiveInterfaceTheme: InterfaceTheme {
+        if viewModel.interfaceTheme == .clear {
+            return systemColorScheme == .dark ? .clearDark : .clearLight
+        }
+        return viewModel.interfaceTheme
     }
 }

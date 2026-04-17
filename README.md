@@ -34,7 +34,7 @@ Functional Apple-platform baseline:
   - menu + sidebar actions: refresh, stage, commit, pull, push, sync
 - Interface customization controls:
   - transparency slider
-  - theme: light / dark / clear light / clear dark
+  - theme: light / dark / clear (auto) with explicit clear light/clear dark override
   - mode: zen / debug (toggle)
   - clear-mode background effect settings:
     - native material blur toggle and material selection

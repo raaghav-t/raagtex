@@ -59,11 +59,6 @@ public enum InterfaceTheme: String, CaseIterable, Codable, Hashable, Sendable {
     }
 }
 
-public enum InterfaceThemeTone: Sendable {
-    case light
-    case dark
-}
-
 public extension InterfaceTheme {
     var isClearVariant: Bool {
         switch self {
@@ -71,15 +66,6 @@ public extension InterfaceTheme {
             return true
         case .light, .dark:
             return false
-        }
-    }
-
-    var tone: InterfaceThemeTone {
-        switch self {
-        case .light, .clearLight:
-            return .light
-        case .dark, .clearDark, .clear:
-            return .dark
         }
     }
 }
