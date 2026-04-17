@@ -86,6 +86,7 @@ public struct CompileResult: Equatable, Sendable {
 public enum CompileRunnerError: Error, LocalizedError {
     case missingMainFile(URL)
     case launchFailed(String)
+    case unsupportedPlatform(String)
 
     public var errorDescription: String? {
         switch self {
@@ -93,6 +94,8 @@ public enum CompileRunnerError: Error, LocalizedError {
             return "Main TeX file does not exist: \(fileURL.path)"
         case .launchFailed(let reason):
             return "Failed to launch latexmk: \(reason)"
+        case .unsupportedPlatform(let reason):
+            return reason
         }
     }
 }
@@ -133,6 +136,11 @@ public struct LatexmkCompileRunner: CompileRunning {
     }
 
     private func runLatexmkOnce(_ request: CompileRequest) throws -> (exitCode: Int32, rawLog: String) {
+        #if os(iOS)
+        throw CompileRunnerError.unsupportedPlatform(
+            "Local latexmk execution is unavailable on iOS/iPadOS. Compile on macOS and sync the output PDF."
+        )
+        #else
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
         process.currentDirectoryURL = request.projectRoot
@@ -188,6 +196,7 @@ public struct LatexmkCompileRunner: CompileRunning {
         let outputData = outputPipe.fileHandleForReading.readDataToEndOfFile()
         let rawLog = String(data: outputData, encoding: .utf8) ?? ""
         return (process.terminationStatus, rawLog)
+        #endif
     }
 
     private func needsSyncTeXRebuild(for request: CompileRequest) -> Bool {
