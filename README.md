@@ -3,7 +3,9 @@
 A beautiful native LaTeX cockpit for fast local writing, compiling, and live document preview.
 
 ## Status
-Functional macOS-first baseline with compile pipeline, built-in editor, PDF preview, theming controls, and project/settings persistence.
+Functional Apple-platform baseline:
+- macOS app with full local compile pipeline, editor, PDF preview, theming controls, and persistence.
+- iPad app with native local project browsing, `.tex` editing, settings/recent-project persistence, diagnostics surface, and PDF preview.
 
 ## Implemented Baseline
 - macOS SwiftUI shell with split-view navigation
@@ -45,7 +47,6 @@ Functional macOS-first baseline with compile pipeline, built-in editor, PDF prev
 - Sample project + smoke and unit/integration tests
 
 ## Planned V2 Scope
-- iPhone/iPad viewer companion
 - Live preview sync from Mac to iPhone/iPad
 - Page-change summaries after compile
 - Friendlier error cards and richer diagnostics UX
@@ -54,7 +55,7 @@ Functional macOS-first baseline with compile pipeline, built-in editor, PDF prev
 
 ## High-Level Architecture
 - `Apps/MacApp`: macOS UI shell, project workflow, editor/preview, compile controls
-- `Apps/iOSApp`: iOS companion scaffold for future live preview
+- `Apps/iOSApp`: iPad workspace shell, project workflow, editor, diagnostics, and PDF preview
 - `Core`: compile domain, latexmk runner, diagnostics parser, document state
 - `Shared`: reusable models + persistence stores (recent projects/settings)
 - `Examples`: small compileable sample LaTeX project

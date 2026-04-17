@@ -10,7 +10,8 @@ let package = Package(
     products: [
         .library(name: "Core", targets: ["Core"]),
         .library(name: "Shared", targets: ["Shared"]),
-        .executable(name: "raagtex", targets: ["MacApp"])
+        .executable(name: "raagtex", targets: ["MacApp"]),
+        .executable(name: "raagtex-ios", targets: ["iOSApp"])
     ],
     targets: [
         .target(
@@ -27,6 +28,11 @@ let package = Package(
             name: "MacApp",
             dependencies: ["Core", "Shared"],
             path: "Apps/MacApp/Sources"
+        ),
+        .executableTarget(
+            name: "iOSApp",
+            dependencies: ["Core", "Shared"],
+            path: "Apps/iOSApp/Sources"
         ),
         .testTarget(
             name: "CoreTests",

@@ -32,9 +32,15 @@ raagtex is a calm, native Apple experience for local LaTeX workflows: write in y
 - Recent project persistence
 - Settings model for engine/main file/auto-compile/theme/mode/transparency/layout plus clear-mode background blur/material/tint controls with fallback renderer options
 - UI themes include light, dark, and clear-transparency variants
+- iPad app shell with:
+  - local folder opening
+  - `.tex` file browser and picker
+  - built-in text editor with save/revert
+  - persisted main-file + engine settings and recent projects
+  - diagnostics + compile-state panel
+  - embedded PDF preview
 
 ## V2 Features
-- Paired iPhone/iPad viewer
 - Live preview sync from Mac to iPhone/iPad
 - Page-change summary after compile
 - Friendlier error cards
@@ -51,8 +57,8 @@ raagtex is a calm, native Apple experience for local LaTeX workflows: write in y
 ## Technical Direction
 - Native Apple-stack project
 - SwiftUI-first approach
-- macOS as primary V1 target
-- iOS scaffold for future companion support
+- macOS + iPad as primary local workflow targets
+- iOS compile execution remains constrained by platform process limits; synced artifacts from macOS remain part of roadmap
 - Shared reusable module boundaries for models/services
 - Keep third-party dependencies minimal unless justified
 - Local compile execution with `latexmk` (system TeX install)
