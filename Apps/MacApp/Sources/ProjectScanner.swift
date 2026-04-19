@@ -14,89 +14,126 @@ struct ProjectFileNode: Identifiable, Hashable {
 }
 
 enum ProjectScanner {
-    static func findTexFiles(projectRoot: URL) -> [String] {
-        let fm = FileManager.default
-        guard let enumerator = fm.enumerator(
-            at: projectRoot,
-            includingPropertiesForKeys: [.isDirectoryKey],
-            options: [.skipsHiddenFiles, .skipsPackageDescendants]
-        ) else {
-            return []
-        }
-
-        var paths: [String] = []
-        for case let fileURL as URL in enumerator {
-            if fileURL.pathExtension.lowercased() != "tex" {
-                continue
-            }
-
-            let relative = fileURL.path.replacingOccurrences(of: projectRoot.path + "/", with: "")
-            paths.append(relative)
-        }
-
-        return paths.sorted()
+    struct Snapshot {
+        let texFiles: [String]
+        let fileTree: [ProjectFileNode]
     }
 
-    static func buildFileTree(projectRoot: URL) -> [ProjectFileNode] {
-        buildNodes(in: projectRoot, projectRoot: projectRoot, depth: 0, maxDepth: 12)
+    private struct DirectoryEntry {
+        let url: URL
+        let name: String
+        let isDirectory: Bool
+    }
+
+    static func scan(projectRoot: URL) -> Snapshot {
+        let normalizedRoot = projectRoot.standardizedFileURL
+        let rootPath = normalizedRoot.path
+        let rootPathPrefix = rootPath.hasSuffix("/") ? rootPath : rootPath + "/"
+
+        var texFiles: [String] = []
+        let fileTree = buildNodes(
+            in: normalizedRoot,
+            projectRootPathPrefix: rootPathPrefix,
+            depth: 0,
+            maxDepth: 12,
+            texFiles: &texFiles
+        )
+        texFiles.sort()
+        return Snapshot(texFiles: texFiles, fileTree: fileTree)
     }
 
     private static func buildNodes(
         in directory: URL,
-        projectRoot: URL,
+        projectRootPathPrefix: String,
         depth: Int,
-        maxDepth: Int
+        maxDepth: Int,
+        texFiles: inout [String]
     ) -> [ProjectFileNode] {
         guard depth <= maxDepth else { return [] }
 
         let fm = FileManager.default
+        let keys: Set<URLResourceKey> = [.isDirectoryKey, .nameKey]
         guard
             let children = try? fm.contentsOfDirectory(
                 at: directory,
-                includingPropertiesForKeys: [.isDirectoryKey, .nameKey],
+                includingPropertiesForKeys: Array(keys),
                 options: [.skipsHiddenFiles, .skipsPackageDescendants]
             )
         else {
             return []
         }
 
-        let sorted = children.sorted { lhs, rhs in
-            let lhsIsDirectory = (try? lhs.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) ?? false
-            let rhsIsDirectory = (try? rhs.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) ?? false
-
-            if lhsIsDirectory != rhsIsDirectory {
-                return lhsIsDirectory && lhsIsDirectory != rhsIsDirectory
-            }
-
-            return lhs.lastPathComponent.localizedStandardCompare(rhs.lastPathComponent) == .orderedAscending
+        let entries = children.map { childURL -> DirectoryEntry in
+            let values = try? childURL.resourceValues(forKeys: keys)
+            return DirectoryEntry(
+                url: childURL,
+                name: values?.name ?? childURL.lastPathComponent,
+                isDirectory: values?.isDirectory ?? false
+            )
         }
 
-        return sorted.compactMap { url in
-            let values = try? url.resourceValues(forKeys: [.isDirectoryKey])
-            let isDirectory = values?.isDirectory ?? false
+        let sorted = entries.sorted { lhs, rhs in
+            if lhs.isDirectory != rhs.isDirectory {
+                return lhs.isDirectory && rhs.isDirectory == false
+            }
+            return lhs.name.localizedStandardCompare(rhs.name) == .orderedAscending
+        }
 
-            let relativePath = url.path.replacingOccurrences(of: projectRoot.path + "/", with: "")
-            if isDirectory {
-                let childNodes = buildNodes(in: url, projectRoot: projectRoot, depth: depth + 1, maxDepth: maxDepth)
-                return ProjectFileNode(
+        var nodes: [ProjectFileNode] = []
+        nodes.reserveCapacity(sorted.count)
+
+        for entry in sorted {
+            let relativePath = relativePath(for: entry.url, projectRootPathPrefix: projectRootPathPrefix)
+            if entry.isDirectory {
+                if shouldSkipDirectory(relativePath: relativePath) {
+                    continue
+                }
+                let childNodes = buildNodes(
+                    in: entry.url,
+                    projectRootPathPrefix: projectRootPathPrefix,
+                    depth: depth + 1,
+                    maxDepth: maxDepth,
+                    texFiles: &texFiles
+                )
+                nodes.append(ProjectFileNode(
                     relativePath: relativePath,
-                    displayName: url.lastPathComponent,
+                    displayName: entry.name,
                     isDirectory: true,
                     children: childNodes
-                )
+                ))
+                continue
+            }
+
+            if entry.url.pathExtension.caseInsensitiveCompare("tex") == .orderedSame {
+                texFiles.append(relativePath)
             }
 
             if isSupplementaryArtifact(relativePath: relativePath) {
-                return nil
+                continue
             }
 
-            return ProjectFileNode(
+            nodes.append(ProjectFileNode(
                 relativePath: relativePath,
-                displayName: url.lastPathComponent,
+                displayName: entry.name,
                 isDirectory: false,
                 children: nil
-            )
+            ))
         }
+
+        return nodes
+    }
+
+    private static func relativePath(for url: URL, projectRootPathPrefix: String) -> String {
+        let path = url.path
+        guard path.hasPrefix(projectRootPathPrefix) else {
+            return url.lastPathComponent
+        }
+        return String(path.dropFirst(projectRootPathPrefix.count))
+    }
+
+    private static func shouldSkipDirectory(relativePath: String) -> Bool {
+        let lower = relativePath.lowercased()
+        return lower.hasPrefix("_minted-") || lower.contains("/_minted-")
     }
 
     private static func isSupplementaryArtifact(relativePath: String) -> Bool {
@@ -114,7 +151,7 @@ enum ProjectScanner {
             return true
         }
 
-        if lower.contains("/_minted-") {
+        if lower.hasPrefix("_minted-") || lower.contains("/_minted-") {
             return true
         }
 

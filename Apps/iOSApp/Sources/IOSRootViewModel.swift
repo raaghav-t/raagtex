@@ -225,9 +225,24 @@ final class IOSRootViewModel: ObservableObject {
 
 private enum IOSProjectScanner {
     static func findTexFiles(projectRoot: URL) -> [String] {
+<<<<<<< ours
+<<<<<<< ours
+        let normalizedRoot = projectRoot.standardizedFileURL
+        let rootPath = normalizedRoot.path
+        let rootPathPrefix = rootPath.hasSuffix("/") ? rootPath : rootPath + "/"
+
+        guard let enumerator = FileManager.default.enumerator(
+            at: normalizedRoot,
+=======
         let fm = FileManager.default
         guard let enumerator = fm.enumerator(
             at: projectRoot,
+>>>>>>> theirs
+=======
+        let fm = FileManager.default
+        guard let enumerator = fm.enumerator(
+            at: projectRoot,
+>>>>>>> theirs
             includingPropertiesForKeys: [.isDirectoryKey],
             options: [.skipsHiddenFiles, .skipsPackageDescendants]
         ) else {
@@ -236,6 +251,36 @@ private enum IOSProjectScanner {
 
         var paths: [String] = []
         for case let fileURL as URL in enumerator {
+<<<<<<< ours
+<<<<<<< ours
+            let relativePath = relativePath(for: fileURL, rootPathPrefix: rootPathPrefix)
+            if shouldSkipGeneratedDirectory(relativePath: relativePath, at: fileURL) {
+                enumerator.skipDescendants()
+                continue
+            }
+            guard fileURL.pathExtension.caseInsensitiveCompare("tex") == .orderedSame else { continue }
+            paths.append(relativePath)
+        }
+
+        return paths.sorted()
+    }
+
+    private static func relativePath(for fileURL: URL, rootPathPrefix: String) -> String {
+        let path = fileURL.path
+        guard path.hasPrefix(rootPathPrefix) else {
+            return fileURL.lastPathComponent
+        }
+        return String(path.dropFirst(rootPathPrefix.count))
+    }
+
+    private static func shouldSkipGeneratedDirectory(relativePath: String, at fileURL: URL) -> Bool {
+        let lower = relativePath.lowercased()
+        guard lower.hasPrefix("_minted-") || lower.contains("/_minted-") else { return false }
+        let isDirectory = (try? fileURL.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) ?? false
+        return isDirectory
+=======
+=======
+>>>>>>> theirs
             if fileURL.pathExtension.lowercased() != "tex" {
                 continue
             }
@@ -245,5 +290,9 @@ private enum IOSProjectScanner {
         }
 
         return paths.sorted()
+<<<<<<< ours
+>>>>>>> theirs
+=======
+>>>>>>> theirs
     }
 }

@@ -12,6 +12,7 @@ struct MacRootView: View {
     @State private var syntaxColorsCustomized = false
     @State private var isSyntaxGlyphHovered = false
     @State private var isCommandGlyphHovered = false
+    @State private var isEditorPathGlyphHovered = false
     @State private var isExperienceCollapsed = false
     @State private var expandedDirectoryPaths: Set<String> = []
 
@@ -55,6 +56,15 @@ struct MacRootView: View {
         }
         .sheet(isPresented: $viewModel.showsShortcutCommandEditor) {
             ShortcutCommandEditorPanel(commands: $viewModel.editorShortcutCommands)
+        }
+        .sheet(isPresented: $viewModel.showsTemplateManager) {
+            TemplateManagerPanel()
+        }
+        .sheet(isPresented: $viewModel.showsNewFileSheet) {
+            NewTemplateFilePanel()
+        }
+        .sheet(isPresented: $viewModel.showsAddStyleSheet) {
+            AddStyleToProjectPanel()
         }
         .onAppear {
             syntaxColors = EditorSyntaxColors.defaults(for: effectiveInterfaceTheme)
@@ -112,10 +122,19 @@ struct MacRootView: View {
             }
 
             if viewModel.projectRoot != nil {
-                Section("Files") {
+                Section {
                     ForEach(viewModel.projectFileTree) { node in
                         fileTreeBranch(node)
                     }
+                } header: {
+                    HStack(spacing: 6) {
+                        Text("Files")
+                        Text("\\hspace ~\\\(viewModel.projectDisplayName)\\")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+                    .textCase(nil)
                 }
             }
 
@@ -160,22 +179,24 @@ struct MacRootView: View {
                             .padding(.vertical, 6)
                             .background(.thinMaterial, in: Capsule())
                             .padding(.top, 8)
+                            .transition(.opacity)
                             .onTapGesture {
                                 viewModel.clearBanner()
                             }
                     }
                 }
+                .animation(.easeInOut(duration: 0.2), value: viewModel.bannerMessage)
         }
     }
 
     private var contentSplit: some View {
         HSplitView {
             editorAndPreview
-                .frame(minWidth: 620, minHeight: 500)
+                .frame(minHeight: 500)
 
             if viewModel.interfaceMode == .debug {
                 debugPane
-                    .frame(minWidth: 320)
+                    .frame(minWidth: 240, idealWidth: 320)
                     .padding(10)
             }
         }
@@ -372,16 +393,16 @@ struct MacRootView: View {
         case .leftRight:
             HSplitView {
                 editorPane
-                    .frame(minWidth: 300)
+                    .frame(minWidth: 180)
                 previewPane
-                    .frame(minWidth: 300)
+                    .frame(minWidth: 180)
             }
         case .rightLeft:
             HSplitView {
                 previewPane
-                    .frame(minWidth: 300)
+                    .frame(minWidth: 180)
                 editorPane
-                    .frame(minWidth: 300)
+                    .frame(minWidth: 180)
             }
         case .topBottom:
             VSplitView {
@@ -401,8 +422,38 @@ struct MacRootView: View {
     private var editorPane: some View {
         VStack(spacing: 0) {
             HStack {
-                Label("Editor", systemImage: "square.and.pencil")
-                    .font(.subheadline.weight(.semibold))
+                HStack(spacing: 6) {
+                    Button {
+                        viewModel.copySelectedEditorFilePath()
+                    } label: {
+                        Image(systemName: "square.and.pencil")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(isEditorPathGlyphHovered ? activeTint : .secondary)
+                            .frame(width: 16, height: 16)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(viewModel.selectedEditorFileURL == nil)
+                    .help("Copy path")
+                    .onHover { hovering in
+                        let nextValue = hovering && viewModel.selectedEditorFileURL != nil
+                        guard nextValue != isEditorPathGlyphHovered else { return }
+                        DispatchQueue.main.async {
+                            isEditorPathGlyphHovered = nextValue
+                        }
+                    }
+
+                    if isEditorPathGlyphHovered {
+                        Text("Copy Path")
+                            .font(.caption2.weight(.medium))
+                            .foregroundStyle(.secondary)
+                            .transition(.opacity)
+                    }
+
+                    Text("Editor")
+                        .font(.subheadline.weight(.semibold))
+                }
+                .animation(.easeInOut(duration: 0.12), value: isEditorPathGlyphHovered)
+
                 Spacer()
                 if viewModel.hasUnsavedEditorChanges {
                     Text("Unsaved")

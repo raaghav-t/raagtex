@@ -58,6 +58,17 @@ struct RaagtexMacApp: App {
 
                 Divider()
 
+                Button("Edit Templates…") {
+                    activeViewModel?.presentTemplateManager()
+                }
+
+                Button("Add Style…") {
+                    activeViewModel?.presentAddStyleSheet()
+                }
+                .disabled(activeViewModel?.projectRoot == nil)
+
+                Divider()
+
                 Button("Reveal Project in Finder") {
                     activeViewModel?.openProjectInFinder()
                 }
@@ -150,10 +161,29 @@ struct RaagtexMacApp: App {
 
                     Divider()
 
-                    Toggle("Zen", isOn: zenModeBinding(for: activeViewModel))
-                    Toggle("Spellcheck", isOn: boolBinding(activeViewModel, keyPath: \.editorAutoCorrectEnabled))
-                    Toggle("Syntax", isOn: boolBinding(activeViewModel, keyPath: \.editorSyntaxColoringEnabled))
-                    Toggle("Line Numbers", isOn: boolBinding(activeViewModel, keyPath: \.editorLineNumbersEnabled))
+                    Button {
+                        activeViewModel.interfaceMode = activeViewModel.interfaceMode == .zen ? .debug : .zen
+                    } label: {
+                        menuCheckLabel("Zen", isOn: activeViewModel.interfaceMode == .zen)
+                    }
+
+                    Button {
+                        activeViewModel.editorAutoCorrectEnabled.toggle()
+                    } label: {
+                        menuCheckLabel("Spellcheck", isOn: activeViewModel.editorAutoCorrectEnabled)
+                    }
+
+                    Button {
+                        activeViewModel.editorSyntaxColoringEnabled.toggle()
+                    } label: {
+                        menuCheckLabel("Syntax", isOn: activeViewModel.editorSyntaxColoringEnabled)
+                    }
+
+                    Button {
+                        activeViewModel.editorLineNumbersEnabled.toggle()
+                    } label: {
+                        menuCheckLabel("Line Numbers", isOn: activeViewModel.editorLineNumbersEnabled)
+                    }
 
                     Divider()
 
@@ -216,18 +246,13 @@ private extension RaagtexMacApp {
         openWindow(id: WorkspaceWindow.sceneID, value: windowID)
     }
 
-    func boolBinding(_ viewModel: MacRootViewModel, keyPath: ReferenceWritableKeyPath<MacRootViewModel, Bool>) -> Binding<Bool> {
-        Binding(
-            get: { viewModel[keyPath: keyPath] },
-            set: { viewModel[keyPath: keyPath] = $0 }
-        )
-    }
-
-    func zenModeBinding(for viewModel: MacRootViewModel) -> Binding<Bool> {
-        Binding(
-            get: { viewModel.interfaceMode == .zen },
-            set: { viewModel.interfaceMode = $0 ? .zen : .debug }
-        )
+    @ViewBuilder
+    func menuCheckLabel(_ title: String, isOn: Bool) -> some View {
+        if isOn {
+            Label(title, systemImage: "checkmark")
+        } else {
+            Text(title)
+        }
     }
 
     func themeDisplayName(_ theme: InterfaceTheme) -> String {

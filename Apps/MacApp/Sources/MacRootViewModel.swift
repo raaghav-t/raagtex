@@ -40,7 +40,9 @@ final class MacRootViewModel: ObservableObject {
         didSet {
             guard oldValue != autoCompileEnabled else { return }
             persistSettings()
-            configureWatcher()
+            if isApplyingLoadedSettings == false {
+                configureWatcher()
+            }
         }
     }
 
@@ -193,7 +195,9 @@ final class MacRootViewModel: ObservableObject {
         didSet {
             guard gitHelpersEnabled != oldValue else { return }
             persistSettings()
-            configureGitAutoPullTimer()
+            if isApplyingLoadedSettings == false {
+                configureGitAutoPullTimer()
+            }
         }
     }
     @Published var gitStageOnSave: Bool = false {
@@ -206,7 +210,9 @@ final class MacRootViewModel: ObservableObject {
         didSet {
             guard gitAutoPullEnabled != oldValue else { return }
             persistSettings()
-            configureGitAutoPullTimer()
+            if isApplyingLoadedSettings == false {
+                configureGitAutoPullTimer()
+            }
         }
     }
 
@@ -228,7 +234,12 @@ final class MacRootViewModel: ObservableObject {
     @Published private(set) var documentState = DocumentState()
     @Published private(set) var isCompiling = false
     @Published var selectedLogTab = LogTab.diagnostics
-    @Published var bannerMessage: String?
+    @Published var bannerMessage: String? {
+        didSet {
+            guard bannerMessage != oldValue else { return }
+            scheduleBannerAutoDismiss()
+        }
+    }
     @Published private(set) var isGitRepository = false
     @Published private(set) var gitBranchName = ""
     @Published private(set) var gitAheadCount = 0
@@ -239,6 +250,13 @@ final class MacRootViewModel: ObservableObject {
     @Published private(set) var hasProjectClipboardItem = false
     @Published var showsSyntaxColorEditor = false
     @Published var showsShortcutCommandEditor = false
+    @Published var showsTemplateManager = false
+    @Published var showsNewFileSheet = false
+    @Published var showsAddStyleSheet = false
+    @Published private(set) var templateFolderURL: URL?
+    @Published private(set) var documentTemplates: [TemplateEntry] = []
+    @Published private(set) var styleTemplates: [TemplateEntry] = []
+    @Published private(set) var pendingNewFileDirectory = ""
     @Published private(set) var debugLastSaveAt: Date?
     @Published private(set) var debugLastCompileRequestedAt: Date?
     @Published private(set) var debugLastCompileStartedAt: Date?
@@ -254,31 +272,49 @@ final class MacRootViewModel: ObservableObject {
     private let settingsStore: any SettingsStore
     private let compileRunner: any CompileRunning
     private let gitService: any GitServicing
+    private let userDefaults: UserDefaults
+    private let templateFolderPreferenceKey = "templateLibrary.customRoot.v1"
+    private let templateDisplayNamePreferenceKey = "templateLibrary.displayNames.v1"
 
     private var watcher: DirectoryWatcher?
     private var debounceWorkItem: DispatchWorkItem?
+    private var projectRefreshWorkItem: DispatchWorkItem?
     private var isLoadingEditorText = false
     private var gitAutoPullTimer: Timer?
     private var queuedCompileTrigger: CompileTrigger?
     private var autoCompileSuppressedUntil = Date.distantPast
     private var lastAutoCompileInputFingerprint = ""
+    private var bannerDismissWorkItem: DispatchWorkItem?
+    private var pendingProjectRefreshAfterCompile = false
+    private var isApplyingLoadedSettings = false
     private var projectClipboardItem: ProjectFileClipboardItem? {
         didSet {
             hasProjectClipboardItem = projectClipboardItem != nil
         }
     }
 
+    private enum EnergyTuning {
+        static let fileSystemRefreshDebounce: TimeInterval = 1.0
+        static let autoCompileDebounce: TimeInterval = 0.9
+        static let gitAutoPullInterval: TimeInterval = 300
+        static let gitAutoPullTolerance: TimeInterval = 45
+        static let bannerDisplayDuration: TimeInterval = 3.0
+    }
+
     init(
         recentStore: any RecentProjectsStore = UserDefaultsRecentProjectsStore(),
         settingsStore: any SettingsStore = UserDefaultsSettingsStore(),
         compileRunner: any CompileRunning = LatexmkCompileRunner(),
-        gitService: any GitServicing = GitService()
+        gitService: any GitServicing = GitService(),
+        userDefaults: UserDefaults = .standard
     ) {
         self.recentStore = recentStore
         self.settingsStore = settingsStore
         self.compileRunner = compileRunner
         self.gitService = gitService
+        self.userDefaults = userDefaults
         self.recentProjects = recentStore.load()
+        refreshTemplateLibrary(createDefaults: true)
     }
 
     var projectDisplayName: String {
@@ -336,47 +372,10 @@ final class MacRootViewModel: ObservableObject {
 
     func openProject(url: URL) {
         projectRoot = url
-        texFiles = ProjectScanner.findTexFiles(projectRoot: url)
-        projectFileTree = ProjectScanner.buildFileTree(projectRoot: url)
+        applyProjectScan(ProjectScanner.scan(projectRoot: url))
 
         let settings = settingsStore.load(projectRootPath: url.path)
-        selectedEngine = settings.latexEngine
-        autoCompileEnabled = settings.autoCompileEnabled
-        interfaceTheme = settings.interfaceTheme
-        interfaceMode = settings.interfaceMode
-        interfaceTransparency = settings.interfaceTransparency
-        editorPreviewLayout = settings.editorPreviewLayout
-        editorAutoCorrectEnabled = settings.editorAutoCorrectEnabled
-        editorSyntaxColoringEnabled = settings.editorSyntaxColoringEnabled
-        editorLineNumbersEnabled = settings.editorLineNumbersEnabled
-        editorShortcutCommands = settings.editorShortcutCommands.isEmpty ? EditorShortcutCommand.defaultCommands : settings.editorShortcutCommands
-        gitHelpersEnabled = settings.gitHelpersEnabled
-        gitStageOnSave = settings.gitStageOnSave
-        gitAutoPullEnabled = settings.gitAutoPullEnabled
-        accentRed = settings.customPalette.accentRed
-        accentGreen = settings.customPalette.accentGreen
-        accentBlue = settings.customPalette.accentBlue
-        enableBackgroundBlur = settings.enableBackgroundBlur
-        backgroundBlurMaterial = settings.backgroundBlurMaterial
-        backgroundBlurBlendMode = settings.backgroundBlurBlendMode
-        backgroundRendererPreference = settings.backgroundRendererPreference
-        backgroundTintRed = settings.backgroundTint.red
-        backgroundTintGreen = settings.backgroundTint.green
-        backgroundTintBlue = settings.backgroundTint.blue
-        backgroundTintOpacity = settings.backgroundTintOpacity
-        fallbackBlurRadius = settings.fallbackBlurRadius
-
-        if
-            let savedMain = settings.mainTexRelativePath,
-            texFiles.contains(savedMain),
-            canCompileAsMainFile(savedMain)
-        {
-            selectedMainTex = savedMain
-        } else {
-            selectedMainTex = preferredMainTexFile(from: texFiles) ?? ""
-        }
-
-        selectedEditorTex = selectedMainTex
+        applyLoadedSettings(settings)
         documentState.projectRoot = url
         documentState.mainFileRelativePath = selectedMainTex
         updatePreviewFromExistingPDFIfAvailable()
@@ -413,6 +412,12 @@ final class MacRootViewModel: ObservableObject {
         watcher = nil
         debounceWorkItem?.cancel()
         debounceWorkItem = nil
+        projectRefreshWorkItem?.cancel()
+        projectRefreshWorkItem = nil
+        pendingProjectRefreshAfterCompile = false
+        queuedCompileTrigger = nil
+        gitAutoPullTimer?.invalidate()
+        gitAutoPullTimer = nil
 
         projectRoot = nil
         texFiles = []
@@ -431,6 +436,11 @@ final class MacRootViewModel: ObservableObject {
         lastAutoCompileInputFingerprint = ""
         showsSyntaxColorEditor = false
         showsShortcutCommandEditor = false
+        showsTemplateManager = false
+        showsNewFileSheet = false
+        showsAddStyleSheet = false
+        pendingNewFileDirectory = ""
+        resetGitState()
     }
 
     func exportCompiledPDF() {
@@ -629,6 +639,10 @@ final class MacRootViewModel: ObservableObject {
                 Task { @MainActor in
                     self.isCompiling = false
                     self.suppressAutoCompile(for: 0.9)
+                    if self.pendingProjectRefreshAfterCompile {
+                        self.pendingProjectRefreshAfterCompile = false
+                        self.refreshProjectFilesAndSelections()
+                    }
                     if let queuedTrigger = self.queuedCompileTrigger {
                         self.queuedCompileTrigger = nil
                         self.compileNow(trigger: queuedTrigger)
@@ -729,6 +743,12 @@ final class MacRootViewModel: ObservableObject {
         guard let fileURL = urlForRelativePath(node.relativePath) else { return }
         writeStringsToPasteboard([fileURL.path])
         bannerMessage = "Copied path for \(node.displayName)"
+    }
+
+    func copySelectedEditorFilePath() {
+        guard let fileURL = selectedEditorFileURL else { return }
+        writeStringsToPasteboard([fileURL.path])
+        bannerMessage = "Copied path for \(fileURL.lastPathComponent)"
     }
 
     func copyFileNode(_ node: ProjectFileNode) {
@@ -862,19 +882,11 @@ final class MacRootViewModel: ObservableObject {
     }
 
     func promptCreateFile(in relativeDirectoryPath: String) {
-        let alert = NSAlert()
-        alert.messageText = "New File"
-        alert.informativeText = "Enter a file name (for example, notes.tex)."
-        alert.addButton(withTitle: "Create")
-        alert.addButton(withTitle: "Cancel")
-
-        let field = NSTextField(frame: NSRect(x: 0, y: 0, width: 300, height: 24))
-        field.stringValue = "untitled.tex"
-        alert.accessoryView = field
-
-        let response = alert.runModal()
-        guard response == .alertFirstButtonReturn else { return }
-        createFile(named: field.stringValue, in: relativeDirectoryPath)
+        pendingNewFileDirectory = relativeDirectoryPath
+        refreshTemplateLibrary(createDefaults: true)
+        showsTemplateManager = false
+        showsAddStyleSheet = false
+        showsNewFileSheet = true
     }
 
     func saveEditorToDisk() {
@@ -988,6 +1000,8 @@ final class MacRootViewModel: ObservableObject {
     }
 
     func clearBanner() {
+        bannerDismissWorkItem?.cancel()
+        bannerDismissWorkItem = nil
         bannerMessage = nil
     }
 
@@ -1007,6 +1021,200 @@ final class MacRootViewModel: ObservableObject {
     func presentShortcutCommandEditor() {
         showsSyntaxColorEditor = false
         showsShortcutCommandEditor = true
+    }
+
+    func presentTemplateManager() {
+        refreshTemplateLibrary(createDefaults: true)
+        showsNewFileSheet = false
+        showsAddStyleSheet = false
+        showsTemplateManager = true
+    }
+
+    func dismissTemplateManager() {
+        showsTemplateManager = false
+    }
+
+    func presentAddStyleSheet() {
+        guard projectRoot != nil else {
+            bannerMessage = "Open a project before adding a style."
+            return
+        }
+        refreshTemplateLibrary(createDefaults: true)
+        showsTemplateManager = false
+        showsNewFileSheet = false
+        showsAddStyleSheet = true
+    }
+
+    func dismissAddStyleSheet() {
+        showsAddStyleSheet = false
+    }
+
+    func dismissNewFileSheet() {
+        showsNewFileSheet = false
+    }
+
+    func templates(for kind: TemplateKind) -> [TemplateEntry] {
+        switch kind {
+        case .document:
+            return documentTemplates
+        case .style:
+            return styleTemplates
+        }
+    }
+
+    func templatePreviewText(for template: TemplateEntry?) -> String {
+        guard let template else {
+            return "Select a template to preview."
+        }
+        guard let raw = try? String(contentsOf: template.fileURL, encoding: .utf8) else {
+            return "Unable to load preview for \(template.fileName)."
+        }
+        let text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        if text.isEmpty {
+            return "(empty template)"
+        }
+        let limit = 22_000
+        if text.count <= limit {
+            return text
+        }
+        return String(text.prefix(limit)) + "\n\n... preview truncated ..."
+    }
+
+    func promptSelectTemplateFolder() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.canCreateDirectories = true
+        panel.allowsMultipleSelection = false
+        panel.prompt = "Use Folder"
+
+        if panel.runModal() == .OK, let selectedURL = panel.url {
+            userDefaults.set(selectedURL.path, forKey: templateFolderPreferenceKey)
+            refreshTemplateLibrary(createDefaults: true)
+            bannerMessage = "Template folder set to \(selectedURL.lastPathComponent)."
+        }
+    }
+
+    func useDefaultTemplateFolder() {
+        userDefaults.removeObject(forKey: templateFolderPreferenceKey)
+        refreshTemplateLibrary(createDefaults: true)
+        bannerMessage = "Using default template folder."
+    }
+
+    func revealTemplateFolderInFinder() {
+        guard let templateFolderURL else {
+            bannerMessage = "Template folder unavailable."
+            return
+        }
+        NSWorkspace.shared.activateFileViewerSelecting([templateFolderURL])
+    }
+
+    func refreshTemplateLibrary() {
+        refreshTemplateLibrary(createDefaults: true)
+    }
+
+    func importTemplates(of kind: TemplateKind) {
+        guard let destinationFolder = templateDirectoryURL(for: kind, createIfNeeded: true) else {
+            bannerMessage = "Unable to access template folder."
+            return
+        }
+
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = true
+        panel.canChooseDirectories = false
+        panel.allowsMultipleSelection = true
+        panel.allowedContentTypes = [UTType(filenameExtension: "tex")].compactMap { $0 }
+        panel.prompt = "Import"
+
+        guard panel.runModal() == .OK else { return }
+
+        var importedCount = 0
+        for sourceURL in panel.urls {
+            let destinationURL = uniqueDestinationURL(in: destinationFolder, preferredName: sourceURL.lastPathComponent)
+            do {
+                try FileManager.default.copyItem(at: sourceURL, to: destinationURL)
+                importedCount += 1
+            } catch {
+                bannerMessage = "Import failed for \(sourceURL.lastPathComponent): \(error.localizedDescription)"
+            }
+        }
+
+        refreshTemplateLibrary(createDefaults: false)
+        if importedCount > 0 {
+            bannerMessage = "Imported \(importedCount) template file(s)."
+        }
+    }
+
+    func promptCreateEmptyTemplate(of kind: TemplateKind) {
+        let alert = NSAlert()
+        alert.messageText = kind == .document ? "New Document Template" : "New Style Template"
+        alert.informativeText = "Enter a template file name."
+        alert.addButton(withTitle: "Create")
+        alert.addButton(withTitle: "Cancel")
+
+        let field = NSTextField(frame: NSRect(x: 0, y: 0, width: 320, height: 24))
+        field.stringValue = kind.defaultFileName
+        alert.accessoryView = field
+
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        let proposedName = field.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        createEmptyTemplate(named: proposedName, kind: kind)
+    }
+
+    func addStyleTemplateToCurrentProject(_ template: TemplateEntry) {
+        guard let projectRoot else {
+            bannerMessage = "Open a project before adding a style."
+            return
+        }
+
+        do {
+            let copiedStyleURL = try copyTemplateFile(template, to: projectRoot)
+            refreshProjectFilesAndSelections()
+            showsAddStyleSheet = false
+            bannerMessage = "Added style \(copiedStyleURL.lastPathComponent) to this project."
+        } catch {
+            bannerMessage = "Add style failed: \(error.localizedDescription)"
+        }
+    }
+
+    func createFileFromSheet(
+        named proposedName: String,
+        in relativeDirectoryPath: String,
+        documentTemplate: TemplateEntry?,
+        styleTemplate: TemplateEntry?
+    ) {
+        let created = createFile(
+            named: proposedName,
+            in: relativeDirectoryPath,
+            documentTemplate: documentTemplate,
+            styleTemplate: styleTemplate
+        )
+        if created {
+            showsNewFileSheet = false
+        }
+    }
+
+    func updateTemplateDisplayName(_ template: TemplateEntry, to proposedName: String) {
+        let trimmed = proposedName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let defaultName = template.fileURL.deletingPathExtension().lastPathComponent
+
+        var displayNames = loadTemplateDisplayNameMap()
+        if trimmed.isEmpty || trimmed == defaultName {
+            displayNames.removeValue(forKey: template.id)
+        } else {
+            displayNames[template.id] = trimmed
+        }
+        saveTemplateDisplayNameMap(displayNames)
+        refreshTemplateLibrary(createDefaults: false)
+        bannerMessage = "Updated template name."
+    }
+
+    func resetTemplateDisplayName(_ template: TemplateEntry) {
+        var displayNames = loadTemplateDisplayNameMap()
+        displayNames.removeValue(forKey: template.id)
+        saveTemplateDisplayNameMap(displayNames)
+        refreshTemplateLibrary(createDefaults: false)
+        bannerMessage = "Template name reset to file name."
     }
 
     var selectedEditorFileURL: URL? {
@@ -1040,6 +1248,7 @@ final class MacRootViewModel: ObservableObject {
     }
 
     private func persistSettings() {
+        guard isApplyingLoadedSettings == false else { return }
         guard let projectRoot else { return }
 
         let settings = UserSettings(
@@ -1074,27 +1283,87 @@ final class MacRootViewModel: ObservableObject {
         persistSettings()
     }
 
+    private func applyLoadedSettings(_ settings: UserSettings) {
+        isApplyingLoadedSettings = true
+        defer { isApplyingLoadedSettings = false }
+
+        selectedEngine = settings.latexEngine
+        autoCompileEnabled = settings.autoCompileEnabled
+        interfaceTheme = settings.interfaceTheme
+        interfaceMode = settings.interfaceMode
+        interfaceTransparency = settings.interfaceTransparency
+        editorPreviewLayout = settings.editorPreviewLayout
+        editorAutoCorrectEnabled = settings.editorAutoCorrectEnabled
+        editorSyntaxColoringEnabled = settings.editorSyntaxColoringEnabled
+        editorLineNumbersEnabled = settings.editorLineNumbersEnabled
+        editorShortcutCommands = settings.editorShortcutCommands.isEmpty ? EditorShortcutCommand.defaultCommands : settings.editorShortcutCommands
+        gitHelpersEnabled = settings.gitHelpersEnabled
+        gitStageOnSave = settings.gitStageOnSave
+        gitAutoPullEnabled = settings.gitAutoPullEnabled
+        accentRed = settings.customPalette.accentRed
+        accentGreen = settings.customPalette.accentGreen
+        accentBlue = settings.customPalette.accentBlue
+        enableBackgroundBlur = settings.enableBackgroundBlur
+        backgroundBlurMaterial = settings.backgroundBlurMaterial
+        backgroundBlurBlendMode = settings.backgroundBlurBlendMode
+        backgroundRendererPreference = settings.backgroundRendererPreference
+        backgroundTintRed = settings.backgroundTint.red
+        backgroundTintGreen = settings.backgroundTint.green
+        backgroundTintBlue = settings.backgroundTint.blue
+        backgroundTintOpacity = settings.backgroundTintOpacity
+        fallbackBlurRadius = settings.fallbackBlurRadius
+
+        if
+            let savedMain = settings.mainTexRelativePath,
+            texFiles.contains(savedMain),
+            canCompileAsMainFile(savedMain)
+        {
+            selectedMainTex = savedMain
+        } else {
+            selectedMainTex = preferredMainTexFile(from: texFiles) ?? ""
+        }
+
+        selectedEditorTex = selectedMainTex
+    }
+
     private func configureWatcher() {
         watcher?.stop()
         watcher = nil
+        debounceWorkItem?.cancel()
+        debounceWorkItem = nil
+        projectRefreshWorkItem?.cancel()
+        projectRefreshWorkItem = nil
 
         guard autoCompileEnabled, let projectRoot else { return }
 
         watcher = DirectoryWatcher(url: projectRoot) { [weak self] in
             Task { @MainActor in
-                self?.refreshProjectFileTree()
+                self?.scheduleProjectRefresh()
                 self?.scheduleAutoCompile()
             }
         }
         watcher?.start()
     }
 
-    private func refreshProjectFileTree() {
-        guard let projectRoot else {
-            projectFileTree = []
-            return
+    private func scheduleProjectRefresh() {
+        projectRefreshWorkItem?.cancel()
+
+        let work = DispatchWorkItem { [weak self] in
+            Task { @MainActor in
+                guard let self, self.autoCompileEnabled, self.projectRoot != nil else { return }
+                guard self.isCompiling == false else {
+                    self.pendingProjectRefreshAfterCompile = true
+                    return
+                }
+                self.refreshProjectFilesAndSelections()
+            }
         }
-        projectFileTree = ProjectScanner.buildFileTree(projectRoot: projectRoot)
+
+        projectRefreshWorkItem = work
+        DispatchQueue.global(qos: .utility).asyncAfter(
+            deadline: .now() + EnergyTuning.fileSystemRefreshDebounce,
+            execute: work
+        )
     }
 
     private func scheduleAutoCompile() {
@@ -1112,7 +1381,10 @@ final class MacRootViewModel: ObservableObject {
         }
 
         debounceWorkItem = work
-        DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + 0.6, execute: work)
+        DispatchQueue.global(qos: .utility).asyncAfter(
+            deadline: .now() + EnergyTuning.autoCompileDebounce,
+            execute: work
+        )
     }
 
     private func suppressAutoCompile(for seconds: TimeInterval) {
@@ -1127,8 +1399,7 @@ final class MacRootViewModel: ObservableObject {
         var parts: [String] = []
         parts.reserveCapacity(max(8, texFiles.count))
 
-        let sortedTexFiles = texFiles.sorted()
-        for relativePath in sortedTexFiles {
+        for relativePath in texFiles {
             let fileURL = projectRoot.appending(path: relativePath)
             let values = try? fileURL.resourceValues(forKeys: [.contentModificationDateKey, .fileSizeKey])
             let modified = values?.contentModificationDate?.timeIntervalSince1970 ?? -1
@@ -1172,7 +1443,7 @@ final class MacRootViewModel: ObservableObject {
 
         guard gitAutoPullEnabled, canUseGitTools else { return }
 
-        let timer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in
+        let timer = Timer.scheduledTimer(withTimeInterval: EnergyTuning.gitAutoPullInterval, repeats: true) { [weak self] _ in
             guard let self else { return }
             Task { @MainActor in
                 guard self.canUseGitTools else { return }
@@ -1183,6 +1454,7 @@ final class MacRootViewModel: ObservableObject {
                 self.gitPullRebase()
             }
         }
+        timer.tolerance = EnergyTuning.gitAutoPullTolerance
         RunLoop.main.add(timer, forMode: .common)
         gitAutoPullTimer = timer
     }
@@ -1311,25 +1583,35 @@ final class MacRootViewModel: ObservableObject {
         }
     }
 
-    private func createFile(named proposedName: String, in relativeDirectoryPath: String) {
+    @discardableResult
+    private func createFile(
+        named proposedName: String,
+        in relativeDirectoryPath: String,
+        documentTemplate: TemplateEntry? = nil,
+        styleTemplate: TemplateEntry? = nil
+    ) -> Bool {
         let name = proposedName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard name.isEmpty == false else {
             bannerMessage = "Create file cancelled: name cannot be empty."
-            return
+            return false
         }
         guard name.contains("/") == false else {
             bannerMessage = "Create file failed: names cannot contain '/'."
-            return
+            return false
         }
-        guard let directoryURL = directoryURL(forRelativePath: relativeDirectoryPath) else { return }
+        guard let directoryURL = directoryURL(forRelativePath: relativeDirectoryPath) else { return false }
         let destinationURL = directoryURL.appendingPathComponent(name, isDirectory: false)
         guard FileManager.default.fileExists(atPath: destinationURL.path) == false else {
             bannerMessage = "Create file failed: \(name) already exists."
-            return
+            return false
         }
-
-        let initialContent = name.lowercased().hasSuffix(".tex") ? "% \(name)\n" : ""
         do {
+            let initialContent = try buildInitialContent(
+                forFileName: name,
+                destinationDirectoryURL: directoryURL,
+                documentTemplate: documentTemplate,
+                styleTemplate: styleTemplate
+            )
             try initialContent.write(to: destinationURL, atomically: true, encoding: .utf8)
             refreshProjectFilesAndSelections()
             let createdRelativePath = relativePath(for: destinationURL)
@@ -1337,15 +1619,16 @@ final class MacRootViewModel: ObservableObject {
                 selectedEditorTex = createdRelativePath
             }
             bannerMessage = "Created file \(name)"
+            return true
         } catch {
             bannerMessage = "Create file failed: \(error.localizedDescription)"
+            return false
         }
     }
 
     private func refreshProjectFilesAndSelections() {
         guard let projectRoot else { return }
-        texFiles = ProjectScanner.findTexFiles(projectRoot: projectRoot)
-        projectFileTree = ProjectScanner.buildFileTree(projectRoot: projectRoot)
+        applyProjectScan(ProjectScanner.scan(projectRoot: projectRoot))
 
         if selectedMainTex.isEmpty == false, texFiles.contains(selectedMainTex) == false {
             selectedMainTex = preferredMainTexFile(from: texFiles) ?? ""
@@ -1361,6 +1644,11 @@ final class MacRootViewModel: ObservableObject {
         documentState.mainFileRelativePath = selectedMainTex
         updatePreviewFromExistingPDFIfAvailable()
         refreshCompilePreflightError()
+    }
+
+    private func applyProjectScan(_ snapshot: ProjectScanner.Snapshot) {
+        texFiles = snapshot.texFiles
+        projectFileTree = snapshot.fileTree
     }
 
     private func remapPaths(afterMovingFrom sourceRelativePath: String, to destinationRelativePath: String) {
@@ -1478,10 +1766,255 @@ final class MacRootViewModel: ObservableObject {
         return directory.appendingPathComponent(UUID().uuidString + "-" + preferredName)
     }
 
+    private func refreshTemplateLibrary(createDefaults: Bool) {
+        guard let templateRoot = templateRootURL(createIfNeeded: true) else {
+            templateFolderURL = nil
+            documentTemplates = []
+            styleTemplates = []
+            return
+        }
+
+        templateFolderURL = templateRoot
+        guard
+            let documentDirectory = templateDirectoryURL(for: .document, createIfNeeded: true),
+            let styleDirectory = templateDirectoryURL(for: .style, createIfNeeded: true)
+        else {
+            documentTemplates = []
+            styleTemplates = []
+            return
+        }
+
+        if createDefaults {
+            seedDefaultTemplates(documentDirectory: documentDirectory, styleDirectory: styleDirectory)
+        }
+
+        documentTemplates = scanTemplates(in: documentDirectory, kind: .document)
+        styleTemplates = scanTemplates(in: styleDirectory, kind: .style)
+    }
+
+    private func templateRootURL(createIfNeeded: Bool) -> URL? {
+        let customPath = userDefaults.string(forKey: templateFolderPreferenceKey)?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let rootURL: URL
+        if let customPath, customPath.isEmpty == false {
+            rootURL = URL(fileURLWithPath: customPath, isDirectory: true)
+        } else {
+            rootURL = defaultTemplateRootURL()
+        }
+
+        if createIfNeeded {
+            do {
+                try FileManager.default.createDirectory(at: rootURL, withIntermediateDirectories: true)
+            } catch {
+                bannerMessage = "Template folder setup failed: \(error.localizedDescription)"
+                return nil
+            }
+        }
+        return rootURL.standardizedFileURL
+    }
+
+    private func templateDirectoryURL(for kind: TemplateKind, createIfNeeded: Bool) -> URL? {
+        guard let root = templateRootURL(createIfNeeded: createIfNeeded) else { return nil }
+        let folderURL = root.appendingPathComponent(kind.folderName, isDirectory: true)
+        if createIfNeeded {
+            do {
+                try FileManager.default.createDirectory(at: folderURL, withIntermediateDirectories: true)
+            } catch {
+                bannerMessage = "Template directory setup failed: \(error.localizedDescription)"
+                return nil
+            }
+        }
+        return folderURL.standardizedFileURL
+    }
+
+    private func defaultTemplateRootURL() -> URL {
+        let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+            ?? URL(fileURLWithPath: NSHomeDirectory(), isDirectory: true).appendingPathComponent("Library/Application Support")
+        return base
+            .appendingPathComponent("raagtex", isDirectory: true)
+            .appendingPathComponent("Templates", isDirectory: true)
+    }
+
+    private func seedDefaultTemplates(documentDirectory: URL, styleDirectory: URL) {
+        let defaultDocumentURL = documentDirectory.appendingPathComponent("main.tex")
+        let defaultStyleURL = styleDirectory.appendingPathComponent("note_style.tex")
+
+        if FileManager.default.fileExists(atPath: defaultDocumentURL.path) == false {
+            try? defaultDocumentTemplateText.write(to: defaultDocumentURL, atomically: true, encoding: .utf8)
+        }
+        if FileManager.default.fileExists(atPath: defaultStyleURL.path) == false {
+            try? defaultStyleTemplateText.write(to: defaultStyleURL, atomically: true, encoding: .utf8)
+        }
+    }
+
+    private func scanTemplates(in directory: URL, kind: TemplateKind) -> [TemplateEntry] {
+        let displayNames = loadTemplateDisplayNameMap()
+        let keys: Set<URLResourceKey> = [.isRegularFileKey, .contentModificationDateKey]
+        guard let enumerator = FileManager.default.enumerator(
+            at: directory,
+            includingPropertiesForKeys: Array(keys),
+            options: [.skipsHiddenFiles, .skipsPackageDescendants]
+        ) else {
+            return []
+        }
+
+        var results: [TemplateEntry] = []
+        for case let candidateURL as URL in enumerator {
+            guard candidateURL.pathExtension.lowercased() == "tex" else { continue }
+            let values = try? candidateURL.resourceValues(forKeys: keys)
+            guard values?.isRegularFile == true else { continue }
+            results.append(
+                TemplateEntry(
+                    kind: kind,
+                    fileURL: candidateURL,
+                    lastModifiedAt: values?.contentModificationDate,
+                    customDisplayName: displayNames[candidateURL.standardizedFileURL.path]
+                )
+            )
+        }
+
+        return results.sorted { lhs, rhs in
+            lhs.fileName.localizedCaseInsensitiveCompare(rhs.fileName) == .orderedAscending
+        }
+    }
+
+    private func createEmptyTemplate(named proposedName: String, kind: TemplateKind) {
+        let trimmed = proposedName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.isEmpty == false else {
+            bannerMessage = "Template file name cannot be empty."
+            return
+        }
+
+        let fileName = trimmed.lowercased().hasSuffix(".tex") ? trimmed : trimmed + ".tex"
+        guard fileName.contains("/") == false else {
+            bannerMessage = "Template file names cannot contain '/'."
+            return
+        }
+
+        guard let folderURL = templateDirectoryURL(for: kind, createIfNeeded: true) else { return }
+        let destinationURL = folderURL.appendingPathComponent(fileName, isDirectory: false)
+        guard FileManager.default.fileExists(atPath: destinationURL.path) == false else {
+            bannerMessage = "\(fileName) already exists."
+            return
+        }
+
+        let seedText = kind == .document ? defaultDocumentTemplateText : defaultStyleTemplateText
+        do {
+            try seedText.write(to: destinationURL, atomically: true, encoding: .utf8)
+            refreshTemplateLibrary(createDefaults: false)
+            bannerMessage = "Created template \(fileName)."
+        } catch {
+            bannerMessage = "Template creation failed: \(error.localizedDescription)"
+        }
+    }
+
+    private func copyTemplateFile(_ template: TemplateEntry, to directoryURL: URL) throws -> URL {
+        let destinationURL = uniqueDestinationURL(in: directoryURL, preferredName: template.fileName)
+        try FileManager.default.copyItem(at: template.fileURL, to: destinationURL)
+        return destinationURL
+    }
+
+    private func buildInitialContent(
+        forFileName fileName: String,
+        destinationDirectoryURL: URL,
+        documentTemplate: TemplateEntry?,
+        styleTemplate: TemplateEntry?
+    ) throws -> String {
+        let isTexFile = fileName.lowercased().hasSuffix(".tex")
+        var styleFileName: String?
+        if let styleTemplate {
+            let copiedStyleURL = try copyTemplateFile(styleTemplate, to: destinationDirectoryURL)
+            styleFileName = copiedStyleURL.lastPathComponent
+        }
+
+        var content: String
+        if let documentTemplate {
+            content = (try? String(contentsOf: documentTemplate.fileURL, encoding: .utf8)) ?? ""
+            if content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                content = isTexFile ? "% \(fileName)\n" : ""
+            }
+        } else if isTexFile {
+            content = "% \(fileName)\n"
+        } else {
+            content = ""
+        }
+
+        if let styleFileName, isTexFile {
+            content = applyStyleReference(styleFileName: styleFileName, to: content, createDocumentShellIfNeeded: documentTemplate == nil)
+        }
+
+        return content
+    }
+
+    private func applyStyleReference(
+        styleFileName: String,
+        to source: String,
+        createDocumentShellIfNeeded: Bool
+    ) -> String {
+        let styleInclude = "\\IfFileExists{\(styleFileName)}{\\input{\(styleFileName)}}{}"
+
+        if source.contains("\\input{note_style.tex}") {
+            return source.replacingOccurrences(of: "\\input{note_style.tex}", with: styleInclude)
+        }
+
+        if let beginDocumentRange = source.range(of: "\\begin{document}") {
+            var updated = source
+            updated.insert(contentsOf: styleInclude + "\n\n", at: beginDocumentRange.lowerBound)
+            return updated
+        }
+
+        if createDocumentShellIfNeeded {
+            return """
+            \\documentclass[11pt]{article}
+
+            \(styleInclude)
+
+            \\begin{document}
+
+            \\end{document}
+            """
+        }
+
+        if source.isEmpty {
+            return styleInclude + "\n"
+        }
+        return source + "\n\n" + styleInclude + "\n"
+    }
+
+    private func loadTemplateDisplayNameMap() -> [String: String] {
+        guard let dictionary = userDefaults.dictionary(forKey: templateDisplayNamePreferenceKey) else {
+            return [:]
+        }
+        var result: [String: String] = [:]
+        for (key, value) in dictionary {
+            guard let name = value as? String else { continue }
+            result[key] = name
+        }
+        return result
+    }
+
+    private func saveTemplateDisplayNameMap(_ map: [String: String]) {
+        userDefaults.set(map, forKey: templateDisplayNamePreferenceKey)
+    }
+
     private func writeStringsToPasteboard(_ values: [String]) {
         let board = NSPasteboard.general
         board.clearContents()
         board.writeObjects(values as [NSString])
+    }
+
+    private func scheduleBannerAutoDismiss() {
+        bannerDismissWorkItem?.cancel()
+        bannerDismissWorkItem = nil
+
+        guard let currentMessage = bannerMessage else { return }
+        let work = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            guard self.bannerMessage == currentMessage else { return }
+            self.bannerMessage = nil
+        }
+        bannerDismissWorkItem = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + EnergyTuning.bannerDisplayDuration, execute: work)
     }
 
     private func writeURLsToPasteboard(_ values: [URL]) {
@@ -1723,6 +2256,69 @@ final class MacRootViewModel: ObservableObject {
         }
 
         return nil
+    }
+
+    private var defaultDocumentTemplateText: String {
+        """
+        \\documentclass[11pt]{article}
+
+        % Optional theme toggle expected by note_style.tex
+        \\newif\\ifdarkmode
+        \\darkmodetrue
+        %\\darkmodefalse
+
+        \\IfFileExists{note_style.tex}{\\input{note_style.tex}}{}
+
+        \\subject{Course Name}
+        \\notetitle{Title Here}
+        \\notedate{\\today}
+        \\tags{tag1, tag2}
+
+        \\begin{document}
+
+        {\\huge\\bfseries \\noteTitle}
+
+        \\vspace{0.5em}
+        \\textcolor{line}{\\rule{\\linewidth}{0.8pt}}
+
+        \\topic{Section Title}
+
+        Write your content here.
+
+        \\end{document}
+        """
+    }
+
+    private var defaultStyleTemplateText: String {
+        """
+        % Shared style template
+        \\usepackage[margin=1in]{geometry}
+        \\usepackage[T1]{fontenc}
+        \\usepackage[utf8]{inputenc}
+        \\usepackage{lmodern}
+        \\usepackage{amsmath,amssymb,mathtools,bm}
+        \\usepackage{xcolor}
+        \\usepackage{hyperref}
+
+        \\makeatletter
+        \\@ifundefined{ifdarkmode}{\\newif\\ifdarkmode\\darkmodetrue}{}
+        \\makeatother
+
+        \\ifdarkmode
+            \\definecolor{textmain}{HTML}{E8E6E3}
+            \\definecolor{line}{HTML}{3A3A3A}
+        \\else
+            \\definecolor{textmain}{HTML}{2D221B}
+            \\definecolor{line}{HTML}{D7B89E}
+        \\fi
+
+        \\color{textmain}
+        \\newcommand{\\subject}[1]{\\def\\subjectName{#1}}
+        \\newcommand{\\notetitle}[1]{\\def\\noteTitle{#1}}
+        \\newcommand{\\notedate}[1]{\\def\\noteDate{#1}}
+        \\newcommand{\\tags}[1]{\\def\\noteTags{#1}}
+        \\newcommand{\\topic}[1]{\\section{#1}}
+        """
     }
 }
 

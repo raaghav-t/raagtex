@@ -97,9 +97,23 @@ struct LatexSyntaxEditorView: NSViewRepresentable {
         private var lastHandledLineJumpRequestID: UUID?
         private var highlightWorkItem: DispatchWorkItem?
         private var ignoredWordsWorkItem: DispatchWorkItem?
+        private static let commandRegex = try! NSRegularExpression(pattern: #"\\[A-Za-z@]+\*?"#, options: [.anchorsMatchLines])
+        private static let environmentRegex = try! NSRegularExpression(pattern: #"\\(begin|end)\s*\{[^}\n]+\}"#, options: [.anchorsMatchLines])
+        private static let inlineMathRegex = try! NSRegularExpression(pattern: #"\$[^$\n]*\$"#, options: [.anchorsMatchLines])
+        private static let displayMathBracketRegex = try! NSRegularExpression(pattern: #"\\\[[\s\S]*?\\\]"#, options: [.dotMatchesLineSeparators])
+        private static let displayMathParenRegex = try! NSRegularExpression(pattern: #"\\\([\s\S]*?\\\)"#, options: [.dotMatchesLineSeparators])
+        private static let commentRegex = try! NSRegularExpression(pattern: #"%.*$"#, options: [.anchorsMatchLines])
+        private static let ignoredWordEnvironmentRegex = try! NSRegularExpression(pattern: #"\\(begin|end)\s*\{([^}\n]+)\}"#, options: [.anchorsMatchLines])
+        private static let ignoredWordsMaxScanLength = 180_000
+        private static let fullMathHighlightThreshold = 180_000
 
         init(text: Binding<String>) {
             self.text = text
+        }
+
+        deinit {
+            highlightWorkItem?.cancel()
+            ignoredWordsWorkItem?.cancel()
         }
 
         func applyConfiguration(
@@ -194,6 +208,7 @@ struct LatexSyntaxEditorView: NSViewRepresentable {
         private func scheduleHighlightRefresh(for textView: NSTextView) {
             guard cachedSyntaxColoringEnabled else { return }
             highlightWorkItem?.cancel()
+            let delay = highlightDebounceDelay(for: (textView.string as NSString).length)
             let work = DispatchWorkItem { [weak self, weak textView] in
                 guard let self, let textView else { return }
                 self.applyHighlighting(
@@ -204,7 +219,7 @@ struct LatexSyntaxEditorView: NSViewRepresentable {
                 )
             }
             highlightWorkItem = work
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.045, execute: work)
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: work)
         }
 
         private func scheduleIgnoredWordsRefresh(for textView: NSTextView) {
@@ -217,12 +232,13 @@ struct LatexSyntaxEditorView: NSViewRepresentable {
             }
 
             ignoredWordsWorkItem?.cancel()
+            let delay = ignoredWordsDebounceDelay(for: (textView.string as NSString).length)
             let work = DispatchWorkItem { [weak self, weak textView] in
                 guard let self, let textView else { return }
                 self.updateIgnoredWords(in: textView, source: textView.string)
             }
             ignoredWordsWorkItem = work
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.20, execute: work)
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: work)
         }
 
         private func applyHighlighting(
@@ -245,12 +261,15 @@ struct LatexSyntaxEditorView: NSViewRepresentable {
             )
 
             if syntaxColoringEnabled {
-                applyRegex(#"\\[A-Za-z@]+\*?"#, color: palette.command, on: attributed, source: source, options: [.anchorsMatchLines])
-                applyRegex(#"\\(begin|end)\s*\{[^}\n]+\}"#, color: palette.environment, on: attributed, source: source, options: [.anchorsMatchLines])
-                applyRegex(#"\$[^$\n]*\$"#, color: palette.math, on: attributed, source: source, options: [.anchorsMatchLines])
-                applyRegex(#"\\\[[\s\S]*?\\\]"#, color: palette.math, on: attributed, source: source, options: [.dotMatchesLineSeparators])
-                applyRegex(#"\\\([\s\S]*?\\\)"#, color: palette.math, on: attributed, source: source, options: [.dotMatchesLineSeparators])
-                applyRegex(#"%.*$"#, color: palette.comment, on: attributed, source: source, options: [.anchorsMatchLines])
+                applyRegex(Self.commandRegex, color: palette.command, on: attributed, source: source)
+                applyRegex(Self.environmentRegex, color: palette.environment, on: attributed, source: source)
+                applyRegex(Self.commentRegex, color: palette.comment, on: attributed, source: source)
+
+                if (source as NSString).length <= Self.fullMathHighlightThreshold {
+                    applyRegex(Self.inlineMathRegex, color: palette.math, on: attributed, source: source)
+                    applyRegex(Self.displayMathBracketRegex, color: palette.math, on: attributed, source: source)
+                    applyRegex(Self.displayMathParenRegex, color: palette.math, on: attributed, source: source)
+                }
             }
 
             let selectedRange = textView.selectedRange()
@@ -268,13 +287,11 @@ struct LatexSyntaxEditorView: NSViewRepresentable {
         }
 
         private func applyRegex(
-            _ pattern: String,
+            _ regex: NSRegularExpression,
             color: NSColor,
             on attributed: NSMutableAttributedString,
-            source: String,
-            options: NSRegularExpression.Options
+            source: String
         ) {
-            guard let regex = try? NSRegularExpression(pattern: pattern, options: options) else { return }
             let range = NSRange(location: 0, length: (source as NSString).length)
             regex.enumerateMatches(in: source, options: [], range: range) { match, _, _ in
                 guard let matchRange = match?.range, matchRange.location != NSNotFound else { return }
@@ -292,31 +309,52 @@ struct LatexSyntaxEditorView: NSViewRepresentable {
         private func latexIgnoredWords(in source: String) -> Set<String> {
             var words = Set<String>()
             let nsSource = source as NSString
-            let fullRange = NSRange(location: 0, length: nsSource.length)
+            let scanLength = min(nsSource.length, Self.ignoredWordsMaxScanLength)
+            let scanSource = nsSource.substring(with: NSRange(location: 0, length: scanLength))
+            let nsScanSource = scanSource as NSString
+            let fullRange = NSRange(location: 0, length: nsScanSource.length)
 
-            if let commandRegex = try? NSRegularExpression(pattern: #"\\[A-Za-z@]+\*?"#, options: [.anchorsMatchLines]) {
-                commandRegex.enumerateMatches(in: source, options: [], range: fullRange) { match, _, _ in
-                    guard let match, match.range.location != NSNotFound else { return }
-                    let rawCommand = nsSource.substring(with: match.range)
-                    words.insert(rawCommand)
-                    if rawCommand.first == "\\" {
-                        words.insert(String(rawCommand.dropFirst()))
-                    }
+            Self.commandRegex.enumerateMatches(in: scanSource, options: [], range: fullRange) { match, _, _ in
+                guard let match, match.range.location != NSNotFound else { return }
+                let rawCommand = nsScanSource.substring(with: match.range)
+                words.insert(rawCommand)
+                if rawCommand.first == "\\" {
+                    words.insert(String(rawCommand.dropFirst()))
                 }
             }
 
-            if let environmentRegex = try? NSRegularExpression(pattern: #"\\(begin|end)\s*\{([^}\n]+)\}"#, options: [.anchorsMatchLines]) {
-                environmentRegex.enumerateMatches(in: source, options: [], range: fullRange) { match, _, _ in
-                    guard
-                        let match,
-                        match.numberOfRanges > 2,
-                        match.range(at: 2).location != NSNotFound
-                    else { return }
-                    words.insert(nsSource.substring(with: match.range(at: 2)))
-                }
+            Self.ignoredWordEnvironmentRegex.enumerateMatches(in: scanSource, options: [], range: fullRange) { match, _, _ in
+                guard
+                    let match,
+                    match.numberOfRanges > 2,
+                    match.range(at: 2).location != NSNotFound
+                else { return }
+                words.insert(nsScanSource.substring(with: match.range(at: 2)))
             }
 
             return words
+        }
+
+        private func highlightDebounceDelay(for length: Int) -> TimeInterval {
+            switch length {
+            case 0..<45_000:
+                return 0.07
+            case 45_000..<120_000:
+                return 0.12
+            default:
+                return 0.20
+            }
+        }
+
+        private func ignoredWordsDebounceDelay(for length: Int) -> TimeInterval {
+            switch length {
+            case 0..<45_000:
+                return 0.30
+            case 45_000..<120_000:
+                return 0.45
+            default:
+                return 0.75
+            }
         }
 
         private func jumpToLine(_ line: Int, in textView: NSTextView) {

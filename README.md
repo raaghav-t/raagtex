@@ -12,6 +12,8 @@ Functional Apple-platform baseline:
 - Multiple independent workspace windows (open different projects side-by-side)
 - Open local project folders and discover `.tex` files
 - Sidebar file explorer with nested project folders/files, quick `.tex` selection, and hidden LaTeX-generated supplementary artifacts
+- File creation from templates: document + style `.tex` libraries, text preview, and a template/style manager (`File -> Edit Templates…`) with editable display names separate from file names
+- Quick style import into the active project from template styles (`File -> Add Style…`)
 - Built-in editor for the selected main `.tex` file (save/revert + optional typo AutoCorrect, with `Cmd+S` save-only)
 - Optional in-editor LaTeX syntax coloring tool (grayscale token differentiation)
 - Configurable editor shortcut commands (math-first defaults) via Experience sidebar -> Writing -> Commands
@@ -26,11 +28,11 @@ Functional Apple-platform baseline:
   - bottom-top
   - editor only (no PDF pane)
 - Pop-out viewer window for detached PDF reading
-- Auto-compile toggle with file-system watching
+- Auto-compile toggle with file-system watching, debounce, and coalesced project refresh to reduce CPU wakeups
 - Phase 0 local Git helpers:
   - status summary (branch + ahead/behind + dirty/conflict)
   - stage-on-save toggle
-  - optional periodic auto-pull (rebase)
+  - optional periodic auto-pull (rebase) using an energy-aware timer/tolerance
   - menu + sidebar actions: refresh, stage, commit, pull, push, sync
 - Interface customization controls:
   - transparency slider

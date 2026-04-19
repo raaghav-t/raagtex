@@ -14,7 +14,8 @@ V1 baseline is implemented for local macOS workflows, plus a native iPad workspa
 - main-file/engine settings persistence
 - `latexmk` compile runner and diagnostics parser
 - PDF preview shell and compile output panes
-- auto-compile watcher with debounce
+- auto-compile watcher with debounce and coalesced refresh scheduling (to avoid repeated full-tree scans)
+- macOS template library surfaces for document/style `.tex` templates with a file-menu manager and add-style flow
 - shared `GitService` for Phase 0 local git status + stage/commit/pull/push workflows
 - smoke + unit/integration tests
 - iPad project open + `.tex` editing + diagnostics/PDF surfaces using shared models/services
