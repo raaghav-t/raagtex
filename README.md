@@ -11,6 +11,7 @@ Functional Apple-platform baseline:
 - macOS SwiftUI shell with split-view navigation
 - Multiple independent workspace windows (open different projects side-by-side)
 - Open local project folders and discover `.tex` files
+- iPad top bar controls (open/refresh/main file/engine/compile) with a cleaner sidebar focused on files/recent projects
 - Sidebar file explorer with nested project folders/files, quick `.tex` selection, and hidden LaTeX-generated supplementary artifacts
 - File creation from templates: document + style `.tex` libraries, text preview, and a template/style manager (`File -> Edit Templates…`) with editable display names separate from file names
 - Quick style import into the active project from template styles (`File -> Add Style…`)
@@ -59,6 +60,7 @@ Functional Apple-platform baseline:
 - `Apps/MacApp`: macOS UI shell, project workflow, editor/preview, compile controls
 - `Apps/iOSApp`: iPad workspace shell, project workflow, editor, diagnostics, and PDF preview
 - `Core`: compile domain, latexmk runner, diagnostics parser, document state
+- `Core`: includes iOS compile-backend adapter contracts (`IOSOnDeviceCompileRunning`) for future on-device TeX integration
 - `Shared`: reusable models + persistence stores (recent projects/settings)
 - `Examples`: small compileable sample LaTeX project
 

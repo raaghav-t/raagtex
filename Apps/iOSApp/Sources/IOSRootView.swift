@@ -1,7 +1,13 @@
 import Core
 import PDFKit
+import Shared
 import SwiftUI
 import UniformTypeIdentifiers
+#if canImport(UIKit)
+import UIKit
+#elseif canImport(AppKit)
+import AppKit
+#endif
 
 struct IOSRootView: View {
     @StateObject private var viewModel = IOSRootViewModel()
@@ -14,6 +20,7 @@ struct IOSRootView: View {
             detail
         }
         .navigationSplitViewStyle(.balanced)
+        .toolbar { topToolbar }
         .fileImporter(
             isPresented: $showsFolderImporter,
             allowedContentTypes: [.folder],
@@ -31,45 +38,7 @@ struct IOSRootView: View {
 
     private var sidebar: some View {
         List {
-            Section("Workspace") {
-                Button {
-                    showsFolderImporter = true
-                } label: {
-                    Label("Open Project Folder", systemImage: "folder")
-                }
-
-                Button {
-                    viewModel.refreshProjectFiles()
-                } label: {
-                    Label("Refresh Files", systemImage: "arrow.clockwise")
-                }
-                .disabled(viewModel.projectRoot == nil)
-
-                Button {
-                    viewModel.compileNow()
-                } label: {
-                    Label("Compile", systemImage: "hammer")
-                }
-                .disabled(viewModel.projectRoot == nil || viewModel.isCompiling)
-            }
-
             if viewModel.projectRoot != nil {
-                Section("Main File") {
-                    Picker("Main .tex", selection: $viewModel.selectedMainTex) {
-                        ForEach(viewModel.texFiles, id: \.self) { file in
-                            Text(file).tag(file)
-                        }
-                    }
-                    .pickerStyle(.navigationLink)
-
-                    Picker("Engine", selection: $viewModel.selectedEngine) {
-                        ForEach(CompileEngine.allCases, id: \.self) { engine in
-                            Text(engine.rawValue).tag(engine)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                }
-
                 Section("Files") {
                     ForEach(viewModel.texFiles, id: \.self) { file in
                         Button {
@@ -95,7 +64,86 @@ struct IOSRootView: View {
                 }
             }
         }
-        .navigationTitle("Raagtex iPad")
+    }
+
+    @ToolbarContentBuilder
+    private var topToolbar: some ToolbarContent {
+        ToolbarItem(placement: topBarLeadingPlacement) {
+            HStack(spacing: 8) {
+                Text("raagtex")
+                    .font(.headline.weight(.semibold))
+                if let projectRoot = viewModel.projectRoot {
+                    Text(projectRoot.lastPathComponent)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+            }
+        }
+
+        ToolbarItemGroup(placement: topBarTrailingPlacement) {
+            Button {
+                showsFolderImporter = true
+            } label: {
+                Label("Open", systemImage: "folder.badge.plus")
+            }
+
+            if viewModel.projectRoot != nil {
+                Button {
+                    viewModel.refreshProjectFiles()
+                } label: {
+                    Label("Refresh", systemImage: "arrow.clockwise")
+                }
+
+                Menu {
+                    if viewModel.texFiles.isEmpty {
+                        Text("No .tex files")
+                    } else {
+                        ForEach(viewModel.texFiles, id: \.self) { file in
+                            Button {
+                                viewModel.selectedMainTex = file
+                            } label: {
+                                if viewModel.selectedMainTex == file {
+                                    Label(file, systemImage: "checkmark")
+                                } else {
+                                    Text(file)
+                                }
+                            }
+                        }
+                    }
+                } label: {
+                    Label("Main", systemImage: "doc.text")
+                }
+
+                Menu {
+                    ForEach(CompileEngine.allCases, id: \.self) { engine in
+                        Button {
+                            viewModel.selectedEngine = engine
+                        } label: {
+                            if viewModel.selectedEngine == engine {
+                                Label(engine.rawValue, systemImage: "checkmark")
+                            } else {
+                                Text(engine.rawValue)
+                            }
+                        }
+                    }
+                } label: {
+                    Label(viewModel.selectedEngine.rawValue, systemImage: "gearshape.2")
+                }
+
+                if viewModel.isCompiling {
+                    ProgressView()
+                        .controlSize(.small)
+                } else {
+                    Button {
+                        viewModel.compileNow()
+                    } label: {
+                        Label("Compile", systemImage: "play.fill")
+                    }
+                    .disabled(viewModel.selectedMainTex.isEmpty)
+                }
+            }
+        }
     }
 
     @ViewBuilder
@@ -122,38 +170,89 @@ struct IOSRootView: View {
                         .onTapGesture { viewModel.clearBanner() }
                 }
 
-                HStack {
-                    Text(viewModel.selectedEditorTex.isEmpty ? "Editor" : viewModel.selectedEditorTex)
-                        .font(.headline)
-                    Spacer()
-                    Button("Save") {
-                        viewModel.saveEditorIfNeeded()
-                    }
-                    .disabled(viewModel.hasUnsavedEditorChanges == false)
-
-                    Button("Revert") {
-                        viewModel.revertEditorChanges()
-                    }
-                    .disabled(viewModel.hasUnsavedEditorChanges == false)
-                }
-
-                TextEditor(text: $viewModel.editorText)
-                    .font(.system(.body, design: .monospaced))
-                    .frame(maxHeight: .infinity)
-                    .overlay(alignment: .topTrailing) {
-                        if viewModel.hasUnsavedEditorChanges {
-                            Text("Unsaved")
-                                .font(.caption2.weight(.semibold))
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 4)
-                                .background(.ultraThinMaterial, in: Capsule())
-                                .padding(10)
-                        }
-                    }
-
-                compilePanel
+                editorAndPreviewContent
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
             .padding(12)
+        }
+    }
+
+    @ViewBuilder
+    private var editorAndPreviewContent: some View {
+        switch viewModel.editorPreviewLayout {
+        case .leftRight:
+            HStack(spacing: 10) {
+                editorPane
+                compilePanel
+            }
+        case .rightLeft:
+            HStack(spacing: 10) {
+                compilePanel
+                editorPane
+            }
+        case .topBottom:
+            VStack(spacing: 10) {
+                editorPane
+                compilePanel
+            }
+        case .bottomTop:
+            VStack(spacing: 10) {
+                compilePanel
+                editorPane
+            }
+        case .editorOnly:
+            editorPane
+        }
+    }
+
+    private var editorPane: some View {
+        VStack(spacing: 10) {
+            HStack {
+                Text(viewModel.selectedEditorTex.isEmpty ? "Editor" : viewModel.selectedEditorTex)
+                    .font(.headline)
+                Spacer()
+
+                Menu {
+                    ForEach(EditorPreviewLayout.allCases, id: \.self) { layout in
+                        Button {
+                            viewModel.editorPreviewLayout = layout
+                        } label: {
+                            if viewModel.editorPreviewLayout == layout {
+                                Label(layout.iosLabel, systemImage: "checkmark")
+                            } else {
+                                Text(layout.iosLabel)
+                            }
+                        }
+                    }
+                } label: {
+                    Label("Layout", systemImage: viewModel.editorPreviewLayout.iosIconName)
+                }
+                .labelStyle(.titleAndIcon)
+
+                Button("Save") {
+                    viewModel.saveEditorIfNeeded()
+                }
+                .disabled(viewModel.hasUnsavedEditorChanges == false)
+
+                Button("Revert") {
+                    viewModel.revertEditorChanges()
+                }
+                .disabled(viewModel.hasUnsavedEditorChanges == false)
+            }
+
+            TextEditor(text: $viewModel.editorText)
+                .font(.system(.body, design: .monospaced))
+                .frame(maxHeight: .infinity)
+                .overlay(alignment: .topTrailing) {
+                    if viewModel.hasUnsavedEditorChanges {
+                        Text("Unsaved")
+                            .font(.caption2.weight(.semibold))
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(.ultraThinMaterial, in: Capsule())
+                            .padding(10)
+                    }
+                }
         }
     }
 
@@ -223,11 +322,60 @@ struct IOSRootView: View {
         case .cancelled: "minus.circle.fill"
         }
     }
+
+    private var topBarLeadingPlacement: ToolbarItemPlacement {
+        #if os(iOS)
+        .topBarLeading
+        #else
+        .navigation
+        #endif
+    }
+
+    private var topBarTrailingPlacement: ToolbarItemPlacement {
+        #if os(iOS)
+        .topBarTrailing
+        #else
+        .automatic
+        #endif
+    }
 }
 
-private struct IOSPDFView: UIViewRepresentable {
+private extension EditorPreviewLayout {
+    var iosLabel: String {
+        switch self {
+        case .leftRight:
+            return "Editor Left, Preview Right"
+        case .rightLeft:
+            return "Preview Left, Editor Right"
+        case .topBottom:
+            return "Editor Top, Preview Bottom"
+        case .bottomTop:
+            return "Preview Top, Editor Bottom"
+        case .editorOnly:
+            return "Editor Only"
+        }
+    }
+
+    var iosIconName: String {
+        switch self {
+        case .leftRight:
+            return "rectangle.lefthalf.inset.filled"
+        case .rightLeft:
+            return "rectangle.righthalf.inset.filled"
+        case .topBottom:
+            return "rectangle.tophalf.inset.filled"
+        case .bottomTop:
+            return "rectangle.bottomhalf.inset.filled"
+        case .editorOnly:
+            return "rectangle.inset.filled"
+        }
+    }
+}
+
+private struct IOSPDFView: IOSPlatformViewRepresentable {
     let url: URL
 
+    #if canImport(UIKit)
     func makeUIView(context: Context) -> PDFView {
         let view = PDFView()
         view.autoScales = true
@@ -242,7 +390,29 @@ private struct IOSPDFView: UIViewRepresentable {
             uiView.document = PDFDocument(url: url)
         }
     }
+    #elseif canImport(AppKit)
+    func makeNSView(context: Context) -> PDFView {
+        let view = PDFView()
+        view.autoScales = true
+        view.displayMode = .singlePageContinuous
+        view.displayDirection = .vertical
+        view.backgroundColor = .windowBackgroundColor
+        return view
+    }
+
+    func updateNSView(_ nsView: PDFView, context: Context) {
+        if nsView.document?.documentURL != url {
+            nsView.document = PDFDocument(url: url)
+        }
+    }
+    #endif
 }
+
+#if canImport(UIKit)
+private typealias IOSPlatformViewRepresentable = UIViewRepresentable
+#elseif canImport(AppKit)
+private typealias IOSPlatformViewRepresentable = NSViewRepresentable
+#endif
 
 #Preview {
     IOSRootView()

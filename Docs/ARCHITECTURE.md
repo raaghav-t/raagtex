@@ -19,7 +19,9 @@ V1 baseline is implemented for local macOS workflows, plus a native iPad workspa
 - shared `GitService` for Phase 0 local git status + stage/commit/pull/push workflows
 - smoke + unit/integration tests
 - iPad project open + `.tex` editing + diagnostics/PDF surfaces using shared models/services
+- iOS compile wiring now goes through `CompileRunnerFactory` and an `IOSOnDeviceCompileRunning` adapter, so a real on-device TeX backend can be plugged in without view-model refactors
 
 ## TODO
 - Define compile service interfaces and parser contracts
+- Implement a concrete iOS on-device TeX backend behind `IOSOnDeviceCompileRunning`
 - Define cross-device sync boundaries for V2

@@ -16,7 +16,9 @@
 		89602249E6B78891A1CF1FAC /* DirectoryWatcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9E8EA586C3941A49EC4E609A /* DirectoryWatcher.swift */; };
 		8B95A86B6ED3D2ECEF09A9E6 /* ViewerWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 524800E4FB4D38AEECF1F108 /* ViewerWindow.swift */; };
 		907587F43A190281DC28FB5B /* ProjectScanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7A18ACE734E17DBCF69C8BF /* ProjectScanner.swift */; };
+		B15E9C4A1D2F3A4B5C6D7E8F /* TemplateModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = D37ABE6C3F4A5B6C7D8E9F01 /* TemplateModels.swift */; };
 		BB03FBFE662641347058AB2B /* MacRootViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0FA4AB9C94696B0497338CAE /* MacRootViewModel.swift */; };
+		C26FAD5B2E3A4B5C6D7E8F90 /* TemplatePanels.swift in Sources */ = {isa = PBXBuildFile; fileRef = E48BCF7D4A5B6C7D8E9F0123 /* TemplatePanels.swift */; };
 		F0000E73F50C1AD16898FBCA /* PDFPreviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9E5986DEA7E97881EC1902A8 /* PDFPreviewView.swift */; };
 		FA7666A63F13518F926C61C9 /* Shared in Frameworks */ = {isa = PBXBuildFile; productRef = B8E6D0AD53F2FC1E52717D78 /* Shared */; };
 /* End PBXBuildFile section */
@@ -33,7 +35,9 @@
 		A3333B48F3FDF92EA1389962 /* LatexSyntaxEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LatexSyntaxEditorView.swift; sourceTree = "<group>"; };
 		B40CCA5DF5AFEDAD9807482C /* raagtex.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = raagtex.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		C6C1B96568277A25AD8019A6 /* raagtex */ = {isa = PBXFileReference; lastKnownFileType = folder; name = raagtex; path = ../../..; sourceTree = SOURCE_ROOT; };
+		D37ABE6C3F4A5B6C7D8E9F01 /* TemplateModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TemplateModels.swift; sourceTree = "<group>"; };
 		D7A18ACE734E17DBCF69C8BF /* ProjectScanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectScanner.swift; sourceTree = "<group>"; };
+		E48BCF7D4A5B6C7D8E9F0123 /* TemplatePanels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TemplatePanels.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -94,6 +98,8 @@
 				0FA4AB9C94696B0497338CAE /* MacRootViewModel.swift */,
 				9E5986DEA7E97881EC1902A8 /* PDFPreviewView.swift */,
 				D7A18ACE734E17DBCF69C8BF /* ProjectScanner.swift */,
+				D37ABE6C3F4A5B6C7D8E9F01 /* TemplateModels.swift */,
+				E48BCF7D4A5B6C7D8E9F0123 /* TemplatePanels.swift */,
 				524800E4FB4D38AEECF1F108 /* ViewerWindow.swift */,
 				1DE994F23B10B96438495DF0 /* WindowBackgroundEffectView.swift */,
 			);
@@ -183,6 +189,8 @@
 				BB03FBFE662641347058AB2B /* MacRootViewModel.swift in Sources */,
 				F0000E73F50C1AD16898FBCA /* PDFPreviewView.swift in Sources */,
 				907587F43A190281DC28FB5B /* ProjectScanner.swift in Sources */,
+				B15E9C4A1D2F3A4B5C6D7E8F /* TemplateModels.swift in Sources */,
+				C26FAD5B2E3A4B5C6D7E8F90 /* TemplatePanels.swift in Sources */,
 				8B95A86B6ED3D2ECEF09A9E6 /* ViewerWindow.swift in Sources */,
 				09FB361CABF1C1F7F816834E /* WindowBackgroundEffectView.swift in Sources */,
 			);

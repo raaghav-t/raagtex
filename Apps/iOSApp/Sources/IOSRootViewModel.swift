@@ -29,6 +29,12 @@ final class IOSRootViewModel: ObservableObject {
             persistSettings()
         }
     }
+    @Published var editorPreviewLayout: EditorPreviewLayout = .leftRight {
+        didSet {
+            guard oldValue != editorPreviewLayout else { return }
+            persistSettings()
+        }
+    }
     @Published var editorText: String = "" {
         didSet {
             guard isLoadingEditorText == false, oldValue != editorText else { return }
@@ -50,7 +56,7 @@ final class IOSRootViewModel: ObservableObject {
     init(
         recentStore: any RecentProjectsStore = UserDefaultsRecentProjectsStore(),
         settingsStore: any SettingsStore = UserDefaultsSettingsStore(),
-        compileRunner: any CompileRunning = LatexmkCompileRunner()
+        compileRunner: any CompileRunning = CompileRunnerFactory.makeDefault()
     ) {
         self.recentStore = recentStore
         self.settingsStore = settingsStore
@@ -72,6 +78,7 @@ final class IOSRootViewModel: ObservableObject {
 
         let settings = settingsStore.load(projectRootPath: normalized.path)
         selectedEngine = settings.latexEngine
+        editorPreviewLayout = settings.editorPreviewLayout
         if let preferred = settings.mainTexRelativePath, files.contains(preferred) {
             selectedMainTex = preferred
         } else if files.contains("main.tex") {
@@ -215,6 +222,7 @@ final class IOSRootViewModel: ObservableObject {
         var settings = settingsStore.load(projectRootPath: projectRoot.path)
         settings.mainTexRelativePath = selectedMainTex.isEmpty ? nil : selectedMainTex
         settings.latexEngine = selectedEngine
+        settings.editorPreviewLayout = editorPreviewLayout
         settingsStore.save(settings, projectRootPath: projectRoot.path)
     }
 
