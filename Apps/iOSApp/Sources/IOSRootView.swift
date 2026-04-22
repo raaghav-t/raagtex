@@ -219,6 +219,8 @@ struct IOSRootView: View {
             }
         } else {
             VStack(spacing: 10) {
+                detailControlStrip
+
                 if let banner = viewModel.bannerMessage {
                     Text(banner)
                         .font(.footnote)
@@ -233,6 +235,138 @@ struct IOSRootView: View {
             }
             .padding(12)
         }
+    }
+
+    private var detailControlStrip: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                Button {
+                    showsFolderImporter = true
+                } label: {
+                    Label("Open", systemImage: "folder.badge.plus")
+                }
+                .buttonStyle(.borderedProminent)
+
+                if viewModel.recentProjects.isEmpty == false {
+                    Menu {
+                        ForEach(viewModel.recentProjects) { project in
+                            Button(project.name) {
+                                viewModel.openRecent(project)
+                            }
+                        }
+                    } label: {
+                        Label("Recent", systemImage: "clock.arrow.circlepath")
+                    }
+                    .buttonStyle(.bordered)
+                }
+
+                Button {
+                    toggleSidebarVisibility()
+                } label: {
+                    Label("Sidebar", systemImage: splitViewVisibility == .detailOnly ? "sidebar.left" : "sidebar.left.hide")
+                }
+                .buttonStyle(.bordered)
+
+                Button {
+                    viewModel.refreshProjectFiles()
+                } label: {
+                    Label("Refresh", systemImage: "arrow.clockwise")
+                }
+                .buttonStyle(.bordered)
+
+                Menu {
+                    if viewModel.texFiles.isEmpty {
+                        Text("No .tex files")
+                    } else {
+                        ForEach(viewModel.texFiles, id: \.self) { file in
+                            Button {
+                                viewModel.selectedEditorTex = file
+                            } label: {
+                                if viewModel.selectedEditorTex == file {
+                                    Label(file, systemImage: "checkmark")
+                                } else {
+                                    Text(file)
+                                }
+                            }
+                        }
+                    }
+                } label: {
+                    Label("Edit", systemImage: "text.cursor")
+                }
+                .buttonStyle(.bordered)
+
+                Menu {
+                    if viewModel.texFiles.isEmpty {
+                        Text("No .tex files")
+                    } else {
+                        ForEach(viewModel.texFiles, id: \.self) { file in
+                            Button {
+                                viewModel.selectedMainTex = file
+                            } label: {
+                                if viewModel.selectedMainTex == file {
+                                    Label(file, systemImage: "checkmark")
+                                } else {
+                                    Text(file)
+                                }
+                            }
+                        }
+                    }
+                } label: {
+                    Label("Main", systemImage: "doc.text")
+                }
+                .buttonStyle(.bordered)
+
+                Menu {
+                    ForEach(EditorPreviewLayout.allCases, id: \.self) { layout in
+                        Button {
+                            viewModel.editorPreviewLayout = layout
+                        } label: {
+                            if viewModel.editorPreviewLayout == layout {
+                                Label(layout.iosLabel, systemImage: "checkmark")
+                            } else {
+                                Text(layout.iosLabel)
+                            }
+                        }
+                    }
+                } label: {
+                    Label("Layout", systemImage: viewModel.editorPreviewLayout.iosIconName)
+                }
+                .buttonStyle(.bordered)
+
+                Menu {
+                    ForEach(CompileEngine.allCases, id: \.self) { engine in
+                        Button {
+                            viewModel.selectedEngine = engine
+                        } label: {
+                            if viewModel.selectedEngine == engine {
+                                Label(engine.rawValue, systemImage: "checkmark")
+                            } else {
+                                Text(engine.rawValue)
+                            }
+                        }
+                    }
+                } label: {
+                    Label(viewModel.selectedEngine.rawValue, systemImage: "gearshape.2")
+                }
+                .buttonStyle(.bordered)
+
+                if viewModel.isCompiling {
+                    ProgressView()
+                        .controlSize(.small)
+                        .padding(.horizontal, 8)
+                } else {
+                    Button {
+                        viewModel.compileNow()
+                    } label: {
+                        Label("Compile", systemImage: "play.fill")
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(viewModel.selectedMainTex.isEmpty)
+                }
+            }
+            .padding(8)
+        }
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 
     @ViewBuilder
