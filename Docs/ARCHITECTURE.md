@@ -20,6 +20,8 @@ V1 baseline is implemented for local macOS workflows, plus a native iPad workspa
 - smoke + unit/integration tests
 - iPad project open + `.tex` editing + diagnostics/PDF surfaces using shared models/services
 - iOS compile wiring now goes through `CompileRunnerFactory` and an `IOSOnDeviceCompileRunning` adapter, so a real on-device TeX backend can be plugged in without view-model refactors
+- macOS local compile now explicitly extends PATH for TeX distributions (for example, `/Library/TeX/texbin`) before invoking `latexmk`
+- iPad compile command can fall back to loading an already-generated PDF when on-device compilation is unavailable
 
 ## TODO
 - Define compile service interfaces and parser contracts

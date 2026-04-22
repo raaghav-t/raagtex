@@ -12,9 +12,10 @@ import AppKit
 struct IOSRootView: View {
     @StateObject private var viewModel = IOSRootViewModel()
     @State private var showsFolderImporter = false
+    @State private var splitViewVisibility: NavigationSplitViewVisibility = .all
 
     var body: some View {
-        NavigationSplitView {
+        NavigationSplitView(columnVisibility: $splitViewVisibility) {
             sidebar
         } detail: {
             detail
@@ -88,11 +89,52 @@ struct IOSRootView: View {
                 Label("Open", systemImage: "folder.badge.plus")
             }
 
+            if viewModel.recentProjects.isEmpty == false {
+                Menu {
+                    ForEach(viewModel.recentProjects) { project in
+                        Button(project.name) {
+                            viewModel.openRecent(project)
+                        }
+                    }
+                } label: {
+                    Label("Recent", systemImage: "clock.arrow.circlepath")
+                }
+            }
+
             if viewModel.projectRoot != nil {
+                Button {
+                    toggleSidebarVisibility()
+                } label: {
+                    Label("Sidebar", systemImage: splitViewVisibility == .detailOnly ? "sidebar.left" : "sidebar.left.hide")
+                }
+
                 Button {
                     viewModel.refreshProjectFiles()
                 } label: {
                     Label("Refresh", systemImage: "arrow.clockwise")
+                }
+
+                Menu {
+                    if viewModel.texFiles.isEmpty {
+                        Text("No .tex files")
+                    } else {
+                        ForEach(viewModel.texFiles, id: \.self) { file in
+                            Button {
+                                viewModel.selectedEditorTex = file
+                            } label: {
+                                if viewModel.selectedEditorTex == file {
+                                    Label(file, systemImage: "checkmark")
+                                } else {
+                                    Text(file)
+                                }
+                            }
+                        }
+                    }
+                } label: {
+                    Label(
+                        viewModel.selectedEditorTex.isEmpty ? "Edit" : viewModel.selectedEditorTex,
+                        systemImage: "text.cursor"
+                    )
                 }
 
                 Menu {
@@ -113,6 +155,22 @@ struct IOSRootView: View {
                     }
                 } label: {
                     Label("Main", systemImage: "doc.text")
+                }
+
+                Menu {
+                    ForEach(EditorPreviewLayout.allCases, id: \.self) { layout in
+                        Button {
+                            viewModel.editorPreviewLayout = layout
+                        } label: {
+                            if viewModel.editorPreviewLayout == layout {
+                                Label(layout.iosLabel, systemImage: "checkmark")
+                            } else {
+                                Text(layout.iosLabel)
+                            }
+                        }
+                    }
+                } label: {
+                    Label("Layout", systemImage: viewModel.editorPreviewLayout.iosIconName)
                 }
 
                 Menu {
@@ -211,23 +269,6 @@ struct IOSRootView: View {
                 Text(viewModel.selectedEditorTex.isEmpty ? "Editor" : viewModel.selectedEditorTex)
                     .font(.headline)
                 Spacer()
-
-                Menu {
-                    ForEach(EditorPreviewLayout.allCases, id: \.self) { layout in
-                        Button {
-                            viewModel.editorPreviewLayout = layout
-                        } label: {
-                            if viewModel.editorPreviewLayout == layout {
-                                Label(layout.iosLabel, systemImage: "checkmark")
-                            } else {
-                                Text(layout.iosLabel)
-                            }
-                        }
-                    }
-                } label: {
-                    Label("Layout", systemImage: viewModel.editorPreviewLayout.iosIconName)
-                }
-                .labelStyle(.titleAndIcon)
 
                 Button("Save") {
                     viewModel.saveEditorIfNeeded()
@@ -337,6 +378,12 @@ struct IOSRootView: View {
         #else
         .automatic
         #endif
+    }
+
+    private func toggleSidebarVisibility() {
+        withAnimation(.easeInOut(duration: 0.15)) {
+            splitViewVisibility = splitViewVisibility == .detailOnly ? .all : .detailOnly
+        }
     }
 }
 

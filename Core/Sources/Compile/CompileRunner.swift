@@ -141,12 +141,19 @@ public struct LatexmkCompileRunner: CompileRunning {
             "Local latexmk execution is unavailable on iOS/iPadOS. Compile on macOS and sync the output PDF."
         )
         #else
+        let searchPath = latexToolSearchPath()
+        guard let latexmkExecutable = resolveExecutable(named: "latexmk", searchPath: searchPath) else {
+            throw CompileRunnerError.launchFailed(
+                "latexmk was not found on PATH. Install a TeX distribution (for example, MacTeX) and ensure latexmk is available. Effective PATH: \(searchPath)"
+            )
+        }
+
         let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+        process.executableURL = URL(fileURLWithPath: latexmkExecutable)
         process.currentDirectoryURL = request.projectRoot
+        process.environment = mergedEnvironment(path: searchPath)
         let forceRebuildForSyncTeX = needsSyncTeXRebuild(for: request)
         var arguments = [
-            "latexmk",
             "-cd",
             request.engine.latexmkFlag,
             "-interaction=nonstopmode",
@@ -155,7 +162,7 @@ public struct LatexmkCompileRunner: CompileRunning {
             request.mainFileRelativePath
         ]
         if forceRebuildForSyncTeX {
-            arguments.insert("-g", at: 2)
+            arguments.insert("-g", at: 1)
         }
         process.arguments = arguments
 
@@ -197,6 +204,47 @@ public struct LatexmkCompileRunner: CompileRunning {
         let rawLog = String(data: outputData, encoding: .utf8) ?? ""
         return (process.terminationStatus, rawLog)
         #endif
+    }
+
+    private func latexToolSearchPath() -> String {
+        let base = ProcessInfo.processInfo.environment["PATH"] ?? ""
+        var candidates = base.split(separator: ":").map(String.init)
+        candidates.append(contentsOf: [
+            "/Library/TeX/texbin",
+            "/opt/homebrew/bin",
+            "/usr/local/bin",
+            "/usr/bin",
+            "/bin",
+            "/usr/sbin",
+            "/sbin"
+        ])
+
+        var unique: [String] = []
+        var seen = Set<String>()
+        for candidate in candidates where candidate.isEmpty == false {
+            if seen.insert(candidate).inserted {
+                unique.append(candidate)
+            }
+        }
+        return unique.joined(separator: ":")
+    }
+
+    private func resolveExecutable(named command: String, searchPath: String) -> String? {
+        let fileManager = FileManager.default
+        let segments = searchPath.split(separator: ":").map(String.init)
+        for segment in segments {
+            let candidate = URL(fileURLWithPath: segment).appendingPathComponent(command).path
+            if fileManager.isExecutableFile(atPath: candidate) {
+                return candidate
+            }
+        }
+        return nil
+    }
+
+    private func mergedEnvironment(path: String) -> [String: String] {
+        var environment = ProcessInfo.processInfo.environment
+        environment["PATH"] = path
+        return environment
     }
 
     private func needsSyncTeXRebuild(for request: CompileRequest) -> Bool {

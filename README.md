@@ -5,13 +5,14 @@ A beautiful native LaTeX cockpit for fast local writing, compiling, and live doc
 ## Status
 Functional Apple-platform baseline:
 - macOS app with full local compile pipeline, editor, PDF preview, theming controls, and persistence.
-- iPad app with native local project browsing, `.tex` editing, settings/recent-project persistence, diagnostics surface, and PDF preview.
+- iPad app with native local project browsing, `.tex` editing, settings/recent-project persistence, diagnostics surface, and PDF preview (with on-device compile backend still pluggable/future-facing).
 
 ## Implemented Baseline
 - macOS SwiftUI shell with split-view navigation
 - Multiple independent workspace windows (open different projects side-by-side)
 - Open local project folders and discover `.tex` files
 - iPad top bar controls (open/refresh/main file/engine/compile) with a cleaner sidebar focused on files/recent projects
+- iPad top bar quick controls for sidebar toggle, recent projects, current editor file, and editor/preview layout
 - Sidebar file explorer with nested project folders/files, quick `.tex` selection, and hidden LaTeX-generated supplementary artifacts
 - File creation from templates: document + style `.tex` libraries, text preview, and a template/style manager (`File -> Edit Templates…`) with editable display names separate from file names
 - Quick style import into the active project from template styles (`File -> Add Style…`)
@@ -19,6 +20,8 @@ Functional Apple-platform baseline:
 - Optional in-editor LaTeX syntax coloring tool (grayscale token differentiation)
 - Configurable editor shortcut commands (math-first defaults) via Experience sidebar -> Writing -> Commands
 - Choose compile engine (`pdflatex`, `xelatex`, `lualatex`) and compile via `latexmk`
+- macOS compile runner now resolves TeX tool paths more robustly (including `/Library/TeX/texbin`) for GUI-launched builds
+- iPad compile action gracefully falls back to showing an existing generated PDF when on-device compile is unavailable
 - Preflight main-file validation blocks compile when required document structure is missing (`\documentclass` first non-comment line, plus `\begin{document}`)
 - Structured diagnostics + raw compile log capture
 - PDF preview surface (PDFKit-backed)

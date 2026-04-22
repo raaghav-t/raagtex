@@ -169,10 +169,27 @@ final class IOSRootViewModel: ObservableObject {
                     ? "Compile succeeded"
                     : "Compile finished with issues"
             } catch {
-                documentState.compileStatus = .failed
-                documentState.rawCompileLog = error.localizedDescription
-                documentState.diagnostics = []
-                bannerMessage = "Compile failed: \(error.localizedDescription)"
+                if case CompileRunnerError.unsupportedPlatform(let reason) = error {
+                    let fallbackPDFURL = request.expectedPDFURL
+                    if FileManager.default.fileExists(atPath: fallbackPDFURL.path) {
+                        documentState.compileStatus = .succeeded
+                        documentState.pdfURL = fallbackPDFURL
+                        documentState.rawCompileLog = reason
+                        documentState.diagnostics = []
+                        documentState.lastCompileAt = Date()
+                        bannerMessage = "On-device compile unavailable. Showing latest \(fallbackPDFURL.lastPathComponent)."
+                    } else {
+                        documentState.compileStatus = .failed
+                        documentState.rawCompileLog = reason
+                        documentState.diagnostics = []
+                        bannerMessage = "Compile unavailable on iPad: \(reason)"
+                    }
+                } else {
+                    documentState.compileStatus = .failed
+                    documentState.rawCompileLog = error.localizedDescription
+                    documentState.diagnostics = []
+                    bannerMessage = "Compile failed: \(error.localizedDescription)"
+                }
             }
             isCompiling = false
         }
