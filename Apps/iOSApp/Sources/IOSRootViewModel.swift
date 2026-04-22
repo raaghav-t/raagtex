@@ -14,6 +14,8 @@ final class IOSRootViewModel: ObservableObject {
             if selectedEditorTex.isEmpty {
                 selectedEditorTex = selectedMainTex
             }
+            documentState.mainFileRelativePath = selectedMainTex
+            _ = refreshPreviewFromExistingPDFIfAvailable()
             persistSettings()
         }
     }
@@ -93,6 +95,7 @@ final class IOSRootViewModel: ObservableObject {
 
         documentState.projectRoot = normalized
         documentState.mainFileRelativePath = selectedMainTex
+        _ = refreshPreviewFromExistingPDFIfAvailable()
 
         pushRecentProject(url: normalized)
         bannerMessage = "Opened \(normalized.lastPathComponent)"
@@ -170,8 +173,7 @@ final class IOSRootViewModel: ObservableObject {
                     : "Compile finished with issues"
             } catch {
                 if case CompileRunnerError.unsupportedPlatform(let reason) = error {
-                    let fallbackPDFURL = request.expectedPDFURL
-                    if FileManager.default.fileExists(atPath: fallbackPDFURL.path) {
+                    if let fallbackPDFURL = refreshPreviewFromExistingPDFIfAvailable(mainRelativePath: request.mainFileRelativePath) {
                         documentState.compileStatus = .succeeded
                         documentState.pdfURL = fallbackPDFURL
                         documentState.rawCompileLog = reason
@@ -193,6 +195,63 @@ final class IOSRootViewModel: ObservableObject {
             }
             isCompiling = false
         }
+    }
+
+    @discardableResult
+    private func refreshPreviewFromExistingPDFIfAvailable(mainRelativePath: String? = nil) -> URL? {
+        guard let root = projectRoot else { return nil }
+        let mainPath = (mainRelativePath ?? selectedMainTex).trimmingCharacters(in: .whitespacesAndNewlines)
+        guard mainPath.isEmpty == false else {
+            documentState.pdfURL = nil
+            return nil
+        }
+
+        let mainFileURL = root.appendingPathComponent(mainPath)
+        let baseName = mainFileURL.deletingPathExtension().lastPathComponent
+        let expectedURL = mainFileURL.deletingPathExtension().appendingPathExtension("pdf")
+        let rootCandidate = root.appendingPathComponent(expectedURL.lastPathComponent)
+        var candidates = [expectedURL]
+        if rootCandidate.path != expectedURL.path {
+            candidates.append(rootCandidate)
+        }
+
+        if let enumerator = FileManager.default.enumerator(
+            at: root,
+            includingPropertiesForKeys: [.contentModificationDateKey],
+            options: [.skipsHiddenFiles, .skipsPackageDescendants]
+        ) {
+            for case let fileURL as URL in enumerator {
+                guard fileURL.pathExtension.caseInsensitiveCompare("pdf") == .orderedSame else { continue }
+                guard fileURL.deletingPathExtension().lastPathComponent == baseName else { continue }
+                candidates.append(fileURL)
+            }
+        }
+
+        var deduped: [URL] = []
+        var seen = Set<String>()
+        for candidate in candidates {
+            let key = candidate.standardizedFileURL.path
+            if seen.insert(key).inserted {
+                deduped.append(candidate)
+            }
+        }
+
+        let existing = deduped.compactMap { url -> (URL, Date)? in
+            guard FileManager.default.fileExists(atPath: url.path) else { return nil }
+            let modified = (try? url.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
+            return (url, modified)
+        }
+        .sorted { lhs, rhs in
+            lhs.1 > rhs.1
+        }
+
+        if let matched = existing.first?.0 {
+            documentState.pdfURL = matched
+            return matched
+        }
+
+        documentState.pdfURL = nil
+        return nil
     }
 
     func clearBanner() {
