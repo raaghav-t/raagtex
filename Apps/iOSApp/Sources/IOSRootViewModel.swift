@@ -225,78 +225,12 @@ final class IOSRootViewModel: ObservableObject {
 
 private enum IOSProjectScanner {
     static func findTexFiles(projectRoot: URL) -> [String] {
-<<<<<<< ours
-<<<<<<< ours
-<<<<<<< ours
-<<<<<<< ours
-<<<<<<< ours
-<<<<<<< ours
-<<<<<<< ours
-<<<<<<< ours
-<<<<<<< ours
-<<<<<<< ours
-<<<<<<< ours
         let normalizedRoot = projectRoot.standardizedFileURL
         let rootPath = normalizedRoot.path
         let rootPathPrefix = rootPath.hasSuffix("/") ? rootPath : rootPath + "/"
 
         guard let enumerator = FileManager.default.enumerator(
             at: normalizedRoot,
-=======
-        let fm = FileManager.default
-        guard let enumerator = fm.enumerator(
-            at: projectRoot,
->>>>>>> theirs
-=======
-        let fm = FileManager.default
-        guard let enumerator = fm.enumerator(
-            at: projectRoot,
->>>>>>> theirs
-=======
-        let fm = FileManager.default
-        guard let enumerator = fm.enumerator(
-            at: projectRoot,
->>>>>>> theirs
-=======
-        let fm = FileManager.default
-        guard let enumerator = fm.enumerator(
-            at: projectRoot,
->>>>>>> theirs
-=======
-        let fm = FileManager.default
-        guard let enumerator = fm.enumerator(
-            at: projectRoot,
->>>>>>> theirs
-=======
-        let fm = FileManager.default
-        guard let enumerator = fm.enumerator(
-            at: projectRoot,
->>>>>>> theirs
-=======
-        let fm = FileManager.default
-        guard let enumerator = fm.enumerator(
-            at: projectRoot,
->>>>>>> theirs
-=======
-        let fm = FileManager.default
-        guard let enumerator = fm.enumerator(
-            at: projectRoot,
->>>>>>> theirs
-=======
-        let fm = FileManager.default
-        guard let enumerator = fm.enumerator(
-            at: projectRoot,
->>>>>>> theirs
-=======
-        let fm = FileManager.default
-        guard let enumerator = fm.enumerator(
-            at: projectRoot,
->>>>>>> theirs
-=======
-        let fm = FileManager.default
-        guard let enumerator = fm.enumerator(
-            at: projectRoot,
->>>>>>> theirs
             includingPropertiesForKeys: [.isDirectoryKey],
             options: [.skipsHiddenFiles, .skipsPackageDescendants]
         ) else {
@@ -305,17 +239,6 @@ private enum IOSProjectScanner {
 
         var paths: [String] = []
         for case let fileURL as URL in enumerator {
-<<<<<<< ours
-<<<<<<< ours
-<<<<<<< ours
-<<<<<<< ours
-<<<<<<< ours
-<<<<<<< ours
-<<<<<<< ours
-<<<<<<< ours
-<<<<<<< ours
-<<<<<<< ours
-<<<<<<< ours
             let relativePath = relativePath(for: fileURL, rootPathPrefix: rootPathPrefix)
             if shouldSkipGeneratedDirectory(relativePath: relativePath, at: fileURL) {
                 enumerator.skipDescendants()
@@ -341,66 +264,5 @@ private enum IOSProjectScanner {
         guard lower.hasPrefix("_minted-") || lower.contains("/_minted-") else { return false }
         let isDirectory = (try? fileURL.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) ?? false
         return isDirectory
-=======
-=======
->>>>>>> theirs
-=======
->>>>>>> theirs
-=======
->>>>>>> theirs
-=======
->>>>>>> theirs
-=======
->>>>>>> theirs
-=======
->>>>>>> theirs
-=======
->>>>>>> theirs
-=======
->>>>>>> theirs
-=======
->>>>>>> theirs
-=======
->>>>>>> theirs
-            if fileURL.pathExtension.lowercased() != "tex" {
-                continue
-            }
-
-            let relative = fileURL.path.replacingOccurrences(of: projectRoot.path + "/", with: "")
-            paths.append(relative)
-        }
-
-        return paths.sorted()
-<<<<<<< ours
-<<<<<<< ours
-<<<<<<< ours
-<<<<<<< ours
-<<<<<<< ours
-<<<<<<< ours
-<<<<<<< ours
-<<<<<<< ours
-<<<<<<< ours
-<<<<<<< ours
->>>>>>> theirs
-=======
->>>>>>> theirs
-=======
->>>>>>> theirs
-=======
->>>>>>> theirs
-=======
->>>>>>> theirs
-=======
->>>>>>> theirs
-=======
->>>>>>> theirs
-=======
->>>>>>> theirs
-=======
->>>>>>> theirs
-=======
->>>>>>> theirs
-=======
->>>>>>> theirs
     }
 }
