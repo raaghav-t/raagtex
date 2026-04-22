@@ -147,74 +147,21 @@ final class IOSRootViewModel: ObservableObject {
             return
         }
 
-        #if os(iOS)
         documentState.projectRoot = root
         documentState.mainFileRelativePath = selectedMainTex
         if let fallbackPDFURL = refreshPreviewFromExistingPDFIfAvailable(mainRelativePath: selectedMainTex) {
             documentState.compileStatus = .succeeded
-            documentState.rawCompileLog = "On-device compile backend is not configured. Loaded an existing PDF artifact instead."
+            documentState.rawCompileLog = "Artifact refresh mode (iPad): loaded an existing PDF artifact. Build on Mac to regenerate."
             documentState.diagnostics = []
             documentState.lastCompileAt = Date()
-            bannerMessage = "Loaded latest \(fallbackPDFURL.lastPathComponent). Compile on Mac to regenerate."
+            bannerMessage = "Artifact refresh mode: loaded \(fallbackPDFURL.lastPathComponent). Build on Mac to regenerate."
         } else {
             documentState.compileStatus = .failed
-            documentState.rawCompileLog = "On-device compile backend is not configured."
+            documentState.rawCompileLog = "Artifact refresh mode (iPad): no compiled PDF artifact found."
             documentState.diagnostics = []
-            bannerMessage = "No compiled PDF found for \(selectedMainTex). Compile on Mac first."
+            bannerMessage = "Artifact refresh mode: no compiled PDF found for \(selectedMainTex). Build on Mac first."
         }
         return
-        #endif
-
-        #if !os(iOS)
-        let request = CompileRequest(
-            projectRoot: root,
-            mainFileRelativePath: selectedMainTex,
-            engine: selectedEngine,
-            autoCompile: false
-        )
-
-        isCompiling = true
-        documentState.compileStatus = .running
-        documentState.mainFileRelativePath = selectedMainTex
-        documentState.projectRoot = root
-
-        Task { [weak self] in
-            guard let self else { return }
-            do {
-                let result = try await compileRunner.compile(request)
-                documentState.compileStatus = result.status
-                documentState.diagnostics = result.diagnostics
-                documentState.rawCompileLog = result.rawLog
-                documentState.pdfURL = result.pdfURL
-                documentState.lastCompileAt = result.finishedAt
-                bannerMessage = result.status == .succeeded
-                    ? "Compile succeeded"
-                    : "Compile finished with issues"
-            } catch {
-                if case CompileRunnerError.unsupportedPlatform(let reason) = error {
-                    if let fallbackPDFURL = refreshPreviewFromExistingPDFIfAvailable(mainRelativePath: request.mainFileRelativePath) {
-                        documentState.compileStatus = .succeeded
-                        documentState.pdfURL = fallbackPDFURL
-                        documentState.rawCompileLog = reason
-                        documentState.diagnostics = []
-                        documentState.lastCompileAt = Date()
-                        bannerMessage = "On-device compile unavailable. Showing latest \(fallbackPDFURL.lastPathComponent)."
-                    } else {
-                        documentState.compileStatus = .failed
-                        documentState.rawCompileLog = reason
-                        documentState.diagnostics = []
-                        bannerMessage = "Compile unavailable on iPad: \(reason)"
-                    }
-                } else {
-                    documentState.compileStatus = .failed
-                    documentState.rawCompileLog = error.localizedDescription
-                    documentState.diagnostics = []
-                    bannerMessage = "Compile failed: \(error.localizedDescription)"
-                }
-            }
-            isCompiling = false
-        }
-        #endif
     }
 
     @discardableResult
