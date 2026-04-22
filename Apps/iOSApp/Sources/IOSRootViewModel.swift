@@ -147,6 +147,25 @@ final class IOSRootViewModel: ObservableObject {
             return
         }
 
+        #if os(iOS)
+        documentState.projectRoot = root
+        documentState.mainFileRelativePath = selectedMainTex
+        if let fallbackPDFURL = refreshPreviewFromExistingPDFIfAvailable(mainRelativePath: selectedMainTex) {
+            documentState.compileStatus = .succeeded
+            documentState.rawCompileLog = "On-device compile backend is not configured. Loaded an existing PDF artifact instead."
+            documentState.diagnostics = []
+            documentState.lastCompileAt = Date()
+            bannerMessage = "Loaded latest \(fallbackPDFURL.lastPathComponent). Compile on Mac to regenerate."
+        } else {
+            documentState.compileStatus = .failed
+            documentState.rawCompileLog = "On-device compile backend is not configured."
+            documentState.diagnostics = []
+            bannerMessage = "No compiled PDF found for \(selectedMainTex). Compile on Mac first."
+        }
+        return
+        #endif
+
+        #if !os(iOS)
         let request = CompileRequest(
             projectRoot: root,
             mainFileRelativePath: selectedMainTex,
@@ -195,6 +214,7 @@ final class IOSRootViewModel: ObservableObject {
             }
             isCompiling = false
         }
+        #endif
     }
 
     @discardableResult
