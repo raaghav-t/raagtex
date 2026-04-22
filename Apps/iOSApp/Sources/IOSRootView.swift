@@ -22,25 +22,6 @@ struct IOSRootView: View {
             switch result {
             case .success(let urls):
                 guard let url = urls.first else { return }
-<<<<<<< ours
-<<<<<<< ours
-<<<<<<< ours
-<<<<<<< ours
-<<<<<<< ours
-<<<<<<< ours
-                _ = url.startAccessingSecurityScopedResource()
-=======
->>>>>>> theirs
-=======
->>>>>>> theirs
-=======
->>>>>>> theirs
-=======
->>>>>>> theirs
-=======
->>>>>>> theirs
-=======
->>>>>>> theirs
                 viewModel.openProject(url: url)
             case .failure(let error):
                 viewModel.bannerMessage = "Folder import failed: \(error.localizedDescription)"
