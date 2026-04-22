@@ -187,6 +187,23 @@ struct RaagtexMacApp: App {
 
                     Divider()
 
+                    Button("Increase Text Size") {
+                        activeViewModel.increaseEditorFontSize()
+                    }
+                    .keyboardShortcut("+", modifiers: [.command])
+
+                    Button("Decrease Text Size") {
+                        activeViewModel.decreaseEditorFontSize()
+                    }
+                    .keyboardShortcut("-", modifiers: [.command])
+
+                    Button("Default Text Size") {
+                        activeViewModel.resetEditorFontSize()
+                    }
+                    .keyboardShortcut("0", modifiers: [.command])
+
+                    Divider()
+
                     Button("Edit Syntax Colors…") {
                         activeViewModel.presentSyntaxColorEditor()
                     }

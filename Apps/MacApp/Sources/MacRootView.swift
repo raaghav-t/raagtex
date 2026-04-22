@@ -127,13 +127,16 @@ struct MacRootView: View {
                         fileTreeBranch(node)
                     }
                 } header: {
-                    HStack(spacing: 6) {
+                    HStack(spacing: 0) {
                         Text("Files")
-                        Text("\\hspace ~\\\(viewModel.projectDisplayName)\\")
+                        Text("  ")
+                        Text(viewModel.projectRoot?.path ?? "")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
+                            .truncationMode(.middle)
                     }
+                    .frame(maxWidth: .infinity, alignment: .leading)
                     .textCase(nil)
                 }
             }
@@ -479,6 +482,7 @@ struct MacRootView: View {
                 interfaceTheme: effectiveInterfaceTheme,
                 syntaxColors: syntaxColors,
                 showLineNumbers: viewModel.editorLineNumbersEnabled,
+                editorFontSize: CGFloat(viewModel.editorFontSize),
                 shortcutCommands: viewModel.editorShortcutCommands,
                 lineJumpRequest: viewModel.editorLineJumpRequest,
                 onLineJumpHandled: { id in

@@ -9,6 +9,7 @@ struct LatexSyntaxEditorView: NSViewRepresentable {
     var interfaceTheme: InterfaceTheme
     var syntaxColors: EditorSyntaxColors
     var showLineNumbers: Bool
+    var editorFontSize: CGFloat
     var shortcutCommands: [EditorShortcutCommand]
     var lineJumpRequest: EditorLineJumpRequest?
     var onLineJumpHandled: ((UUID) -> Void)? = nil
@@ -27,7 +28,7 @@ struct LatexSyntaxEditorView: NSViewRepresentable {
         textView.isAutomaticQuoteSubstitutionEnabled = false
         textView.isAutomaticDashSubstitutionEnabled = false
         textView.isAutomaticDataDetectionEnabled = false
-        textView.font = .monospacedSystemFont(ofSize: 15, weight: .regular)
+        textView.font = .monospacedSystemFont(ofSize: Self.clampedFontSize(editorFontSize), weight: .regular)
         textView.allowsUndo = true
         textView.usesFindPanel = true
         textView.usesFindBar = true
@@ -56,6 +57,7 @@ struct LatexSyntaxEditorView: NSViewRepresentable {
             interfaceTheme: interfaceTheme,
             syntaxColors: syntaxColors,
             showLineNumbers: showLineNumbers,
+            editorFontSize: editorFontSize,
             shortcutCommands: shortcutCommands,
             lineJumpRequest: lineJumpRequest,
             onLineJumpHandled: onLineJumpHandled,
@@ -74,12 +76,17 @@ struct LatexSyntaxEditorView: NSViewRepresentable {
             interfaceTheme: interfaceTheme,
             syntaxColors: syntaxColors,
             showLineNumbers: showLineNumbers,
+            editorFontSize: editorFontSize,
             shortcutCommands: shortcutCommands,
             lineJumpRequest: lineJumpRequest,
             onLineJumpHandled: onLineJumpHandled,
             onSaveRequested: onSaveRequested,
             forceTextUpdate: false
         )
+    }
+
+    private static func clampedFontSize(_ size: CGFloat) -> CGFloat {
+        min(max(size, 10), 28)
     }
 
     final class Coordinator: NSObject, NSTextViewDelegate {
@@ -93,6 +100,7 @@ struct LatexSyntaxEditorView: NSViewRepresentable {
         private var cachedAutoCorrectionEnabled = true
         private var cachedTheme: InterfaceTheme = .dark
         private var cachedSyntaxColors = EditorSyntaxColors.defaults(for: .dark)
+        private var cachedEditorFontSize: CGFloat = 15
         private var cachedIgnoredWords: Set<String> = []
         private var lastHandledLineJumpRequestID: UUID?
         private var highlightWorkItem: DispatchWorkItem?
@@ -123,6 +131,7 @@ struct LatexSyntaxEditorView: NSViewRepresentable {
             interfaceTheme: InterfaceTheme,
             syntaxColors: EditorSyntaxColors,
             showLineNumbers: Bool,
+            editorFontSize: CGFloat,
             shortcutCommands: [EditorShortcutCommand],
             lineJumpRequest: EditorLineJumpRequest?,
             onLineJumpHandled: ((UUID) -> Void)?,
@@ -130,6 +139,7 @@ struct LatexSyntaxEditorView: NSViewRepresentable {
             forceTextUpdate: Bool
         ) {
             guard let textView, let scrollView else { return }
+            let effectiveFontSize = LatexSyntaxEditorView.clampedFontSize(editorFontSize)
 
             textView.isEditable = true
             textView.isSelectable = true
@@ -145,12 +155,14 @@ struct LatexSyntaxEditorView: NSViewRepresentable {
             let needsStyleRefresh =
                 cachedSyntaxColoringEnabled != syntaxColoringEnabled ||
                 cachedTheme != interfaceTheme ||
-                cachedSyntaxColors != syntaxColors
+                cachedSyntaxColors != syntaxColors ||
+                cachedEditorFontSize != effectiveFontSize
 
             cachedSyntaxColoringEnabled = syntaxColoringEnabled
             cachedAutoCorrectionEnabled = autocorrectionEnabled
             cachedTheme = interfaceTheme
             cachedSyntaxColors = syntaxColors
+            cachedEditorFontSize = effectiveFontSize
 
             if needsTextSync {
                 isProgrammaticChange = true
@@ -160,7 +172,8 @@ struct LatexSyntaxEditorView: NSViewRepresentable {
                     to: textView,
                     syntaxColoringEnabled: syntaxColoringEnabled,
                     theme: interfaceTheme,
-                    syntaxColors: syntaxColors
+                    syntaxColors: syntaxColors,
+                    fontSize: effectiveFontSize
                 )
                 let maxLength = (newText as NSString).length
                 let clampedLocation = min(selectedRange.location, maxLength)
@@ -173,8 +186,10 @@ struct LatexSyntaxEditorView: NSViewRepresentable {
                     to: textView,
                     syntaxColoringEnabled: syntaxColoringEnabled,
                     theme: interfaceTheme,
-                    syntaxColors: syntaxColors
+                    syntaxColors: syntaxColors,
+                    fontSize: effectiveFontSize
                 )
+                lineNumberRulerView?.invalidateLineNumbers()
             }
 
             if autocorrectionEnabled {
@@ -215,7 +230,8 @@ struct LatexSyntaxEditorView: NSViewRepresentable {
                     to: textView,
                     syntaxColoringEnabled: self.cachedSyntaxColoringEnabled,
                     theme: self.cachedTheme,
-                    syntaxColors: self.cachedSyntaxColors
+                    syntaxColors: self.cachedSyntaxColors,
+                    fontSize: self.cachedEditorFontSize
                 )
             }
             highlightWorkItem = work
@@ -245,7 +261,8 @@ struct LatexSyntaxEditorView: NSViewRepresentable {
             to textView: NSTextView,
             syntaxColoringEnabled: Bool,
             theme: InterfaceTheme,
-            syntaxColors: EditorSyntaxColors
+            syntaxColors: EditorSyntaxColors,
+            fontSize: CGFloat
         ) {
             let source = textView.string
             let attributed = NSMutableAttributedString(string: source)
@@ -255,7 +272,7 @@ struct LatexSyntaxEditorView: NSViewRepresentable {
             attributed.addAttributes(
                 [
                     .foregroundColor: palette.base,
-                    .font: NSFont.monospacedSystemFont(ofSize: 15, weight: .regular)
+                    .font: NSFont.monospacedSystemFont(ofSize: fontSize, weight: .regular)
                 ],
                 range: fullRange
             )
@@ -276,7 +293,7 @@ struct LatexSyntaxEditorView: NSViewRepresentable {
             textView.textStorage?.setAttributedString(attributed)
             textView.typingAttributes = [
                 .foregroundColor: palette.base,
-                .font: NSFont.monospacedSystemFont(ofSize: 15, weight: .regular)
+                .font: NSFont.monospacedSystemFont(ofSize: fontSize, weight: .regular)
             ]
 
             let maxLength = (textView.string as NSString).length

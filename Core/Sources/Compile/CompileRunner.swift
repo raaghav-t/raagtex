@@ -121,7 +121,7 @@ public struct LatexmkCompileRunner: CompileRunning {
         let run = try runLatexmkOnce(request)
         let diagnostics = parser.parse(run.rawLog)
         let status: CompileStatus = run.exitCode == 0 ? .succeeded : .failed
-        let pdfURL = FileManager.default.fileExists(atPath: request.expectedPDFURL.path) ? request.expectedPDFURL : nil
+        let pdfURL = resolvePDFURL(for: request, rawLog: run.rawLog)
 
         return CompileResult(
             status: status,
@@ -205,5 +205,57 @@ public struct LatexmkCompileRunner: CompileRunning {
         let plain = base.appendingPathExtension("synctex")
         let fm = FileManager.default
         return fm.fileExists(atPath: compressed.path) == false && fm.fileExists(atPath: plain.path) == false
+    }
+
+    private func resolvePDFURL(for request: CompileRequest, rawLog: String) -> URL? {
+        let fm = FileManager.default
+        let expectedPDFURL = request.expectedPDFURL
+        let expectedInProjectRoot = request.projectRoot.appendingPathComponent(expectedPDFURL.lastPathComponent)
+        let mainFileDirectory = request.mainFileURL.deletingLastPathComponent()
+        let outputPattern = #"Output written on\s+(.+?\.pdf)\b"#
+        let outputRegex = try? NSRegularExpression(pattern: outputPattern)
+
+        var candidates: [URL] = [expectedPDFURL]
+        if expectedInProjectRoot.path != expectedPDFURL.path {
+            candidates.append(expectedInProjectRoot)
+        }
+
+        if let outputRegex {
+            let nsLog = rawLog as NSString
+            let fullRange = NSRange(location: 0, length: nsLog.length)
+            outputRegex.enumerateMatches(in: rawLog, options: [], range: fullRange) { match, _, _ in
+                guard
+                    let match,
+                    match.numberOfRanges > 1,
+                    match.range(at: 1).location != NSNotFound
+                else { return }
+
+                let rawValue = nsLog
+                    .substring(with: match.range(at: 1))
+                    .trimmingCharacters(in: CharacterSet(charactersIn: "\"'"))
+
+                let candidateURL: URL
+                if rawValue.hasPrefix("/") {
+                    candidateURL = URL(fileURLWithPath: rawValue)
+                } else {
+                    candidateURL = mainFileDirectory.appendingPathComponent(rawValue)
+                }
+                candidates.append(candidateURL)
+            }
+        }
+
+        var seen = Set<String>()
+        let uniqueCandidates = candidates.filter { seen.insert($0.standardizedFileURL.path).inserted }
+
+        for _ in 0..<20 {
+            for candidate in uniqueCandidates {
+                if fm.fileExists(atPath: candidate.path) {
+                    return candidate
+                }
+            }
+            Thread.sleep(forTimeInterval: 0.05)
+        }
+
+        return nil
     }
 }

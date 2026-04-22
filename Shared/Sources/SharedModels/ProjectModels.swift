@@ -204,6 +204,7 @@ public struct UserSettings: Codable, Hashable, Sendable {
     public var editorAutoCorrectEnabled: Bool
     public var editorSyntaxColoringEnabled: Bool
     public var editorLineNumbersEnabled: Bool
+    public var editorFontSize: Double
     public var customPalette: CustomThemePalette
     public var gitHelpersEnabled: Bool
     public var gitStageOnSave: Bool
@@ -228,6 +229,7 @@ public struct UserSettings: Codable, Hashable, Sendable {
         editorAutoCorrectEnabled: Bool = true,
         editorSyntaxColoringEnabled: Bool = true,
         editorLineNumbersEnabled: Bool = false,
+        editorFontSize: Double = 15.0,
         customPalette: CustomThemePalette = .init(),
         gitHelpersEnabled: Bool = true,
         gitStageOnSave: Bool = false,
@@ -251,6 +253,7 @@ public struct UserSettings: Codable, Hashable, Sendable {
         self.editorAutoCorrectEnabled = editorAutoCorrectEnabled
         self.editorSyntaxColoringEnabled = editorSyntaxColoringEnabled
         self.editorLineNumbersEnabled = editorLineNumbersEnabled
+        self.editorFontSize = editorFontSize
         self.customPalette = customPalette
         self.gitHelpersEnabled = gitHelpersEnabled
         self.gitStageOnSave = gitStageOnSave
@@ -276,6 +279,7 @@ public struct UserSettings: Codable, Hashable, Sendable {
         case editorAutoCorrectEnabled
         case editorSyntaxColoringEnabled
         case editorLineNumbersEnabled
+        case editorFontSize
         case customPalette
         case gitHelpersEnabled
         case gitStageOnSave
@@ -302,6 +306,7 @@ public struct UserSettings: Codable, Hashable, Sendable {
         editorAutoCorrectEnabled = try container.decodeIfPresent(Bool.self, forKey: .editorAutoCorrectEnabled) ?? true
         editorSyntaxColoringEnabled = try container.decodeIfPresent(Bool.self, forKey: .editorSyntaxColoringEnabled) ?? true
         editorLineNumbersEnabled = try container.decodeIfPresent(Bool.self, forKey: .editorLineNumbersEnabled) ?? false
+        editorFontSize = try container.decodeIfPresent(Double.self, forKey: .editorFontSize) ?? 15.0
         customPalette = try container.decodeIfPresent(CustomThemePalette.self, forKey: .customPalette) ?? .init()
         gitHelpersEnabled = try container.decodeIfPresent(Bool.self, forKey: .gitHelpersEnabled) ?? true
         gitStageOnSave = try container.decodeIfPresent(Bool.self, forKey: .gitStageOnSave) ?? false
@@ -328,6 +333,7 @@ public struct UserSettings: Codable, Hashable, Sendable {
         try container.encode(editorAutoCorrectEnabled, forKey: .editorAutoCorrectEnabled)
         try container.encode(editorSyntaxColoringEnabled, forKey: .editorSyntaxColoringEnabled)
         try container.encode(editorLineNumbersEnabled, forKey: .editorLineNumbersEnabled)
+        try container.encode(editorFontSize, forKey: .editorFontSize)
         try container.encode(customPalette, forKey: .customPalette)
         try container.encode(gitHelpersEnabled, forKey: .gitHelpersEnabled)
         try container.encode(gitStageOnSave, forKey: .gitStageOnSave)

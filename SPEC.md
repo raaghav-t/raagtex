@@ -17,7 +17,7 @@ raagtex is a calm, native Apple experience for local LaTeX workflows: write in y
 - Prioritize local-first workflow
 
 ## V1 Features
-- macOS app shell with built-in editor + preview (with optional typo AutoCorrect)
+- macOS app shell with built-in editor + preview (with optional typo AutoCorrect and adjustable editor text size)
 - Optional in-editor LaTeX syntax coloring tool (initial grayscale palette)
 - Configurable keyboard shortcuts for LaTeX wrapping/snippet insertion (math-first defaults) with user-editable mappings
 - Choose/open a LaTeX project
@@ -34,7 +34,7 @@ raagtex is a calm, native Apple experience for local LaTeX workflows: write in y
 - Auto-compile toggle
 - Phase 0 local Git workflow helpers (status/stage/commit/pull/push/sync, with optional stage-on-save and auto-pull)
 - Recent project persistence
-- Settings model for engine/main file/auto-compile/theme/mode/transparency/layout plus clear-mode background blur/material/tint controls with fallback renderer options
+- Settings model for engine/main file/auto-compile/theme/mode/transparency/layout/editor text size plus clear-mode background blur/material/tint controls with fallback renderer options
 - UI themes include light, dark, and clear-transparency variants
 - iPad app shell with:
   - local folder opening

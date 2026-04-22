@@ -185,6 +185,17 @@ final class MacRootViewModel: ObservableObject {
             persistSettings()
         }
     }
+    @Published var editorFontSize: Double = 15.0 {
+        didSet {
+            let clamped = min(max(editorFontSize, EditorTuning.minFontSize), EditorTuning.maxFontSize)
+            if clamped != editorFontSize {
+                editorFontSize = clamped
+                return
+            }
+            guard oldValue != editorFontSize else { return }
+            persistSettings()
+        }
+    }
     @Published var editorShortcutCommands: [EditorShortcutCommand] = EditorShortcutCommand.defaultCommands {
         didSet {
             guard editorShortcutCommands != oldValue else { return }
@@ -299,6 +310,13 @@ final class MacRootViewModel: ObservableObject {
         static let gitAutoPullInterval: TimeInterval = 300
         static let gitAutoPullTolerance: TimeInterval = 45
         static let bannerDisplayDuration: TimeInterval = 3.0
+    }
+
+    private enum EditorTuning {
+        static let minFontSize = 10.0
+        static let maxFontSize = 28.0
+        static let defaultFontSize = 15.0
+        static let fontSizeStep = 1.0
     }
 
     init(
@@ -1013,6 +1031,18 @@ final class MacRootViewModel: ObservableObject {
         interfaceTransparency = amount
     }
 
+    func increaseEditorFontSize() {
+        editorFontSize = min(editorFontSize + EditorTuning.fontSizeStep, EditorTuning.maxFontSize)
+    }
+
+    func decreaseEditorFontSize() {
+        editorFontSize = max(editorFontSize - EditorTuning.fontSizeStep, EditorTuning.minFontSize)
+    }
+
+    func resetEditorFontSize() {
+        editorFontSize = EditorTuning.defaultFontSize
+    }
+
     func presentSyntaxColorEditor() {
         showsShortcutCommandEditor = false
         showsSyntaxColorEditor = true
@@ -1262,6 +1292,7 @@ final class MacRootViewModel: ObservableObject {
             editorAutoCorrectEnabled: editorAutoCorrectEnabled,
             editorSyntaxColoringEnabled: editorSyntaxColoringEnabled,
             editorLineNumbersEnabled: editorLineNumbersEnabled,
+            editorFontSize: editorFontSize,
             customPalette: CustomThemePalette(accentRed: accentRed, accentGreen: accentGreen, accentBlue: accentBlue),
             gitHelpersEnabled: gitHelpersEnabled,
             gitStageOnSave: gitStageOnSave,
@@ -1296,6 +1327,7 @@ final class MacRootViewModel: ObservableObject {
         editorAutoCorrectEnabled = settings.editorAutoCorrectEnabled
         editorSyntaxColoringEnabled = settings.editorSyntaxColoringEnabled
         editorLineNumbersEnabled = settings.editorLineNumbersEnabled
+        editorFontSize = settings.editorFontSize
         editorShortcutCommands = settings.editorShortcutCommands.isEmpty ? EditorShortcutCommand.defaultCommands : settings.editorShortcutCommands
         gitHelpersEnabled = settings.gitHelpersEnabled
         gitStageOnSave = settings.gitStageOnSave

@@ -14,7 +14,7 @@ Functional Apple-platform baseline:
 - Sidebar file explorer with nested project folders/files, quick `.tex` selection, and hidden LaTeX-generated supplementary artifacts
 - File creation from templates: document + style `.tex` libraries, text preview, and a template/style manager (`File -> Edit Templates…`) with editable display names separate from file names
 - Quick style import into the active project from template styles (`File -> Add Style…`)
-- Built-in editor for the selected main `.tex` file (save/revert + optional typo AutoCorrect, with `Cmd+S` save-only)
+- Built-in editor for the selected main `.tex` file (save/revert + optional typo AutoCorrect, with `Cmd+S` save-only) plus adjustable text size
 - Optional in-editor LaTeX syntax coloring tool (grayscale token differentiation)
 - Configurable editor shortcut commands (math-first defaults) via Experience sidebar -> Writing -> Commands
 - Choose compile engine (`pdflatex`, `xelatex`, `lualatex`) and compile via `latexmk`
