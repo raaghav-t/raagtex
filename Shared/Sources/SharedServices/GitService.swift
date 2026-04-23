@@ -142,6 +142,7 @@ public final class GitService: GitServicing {
 
     @discardableResult
     private func runGit(_ arguments: [String], at rootURL: URL) throws -> (stdout: String, stderr: String) {
+        #if os(macOS) || os(Linux)
         let process = Process()
         process.currentDirectoryURL = rootURL
         process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
@@ -166,5 +167,8 @@ public final class GitService: GitServicing {
         }
 
         return (stdout, stderr)
+        #else
+        throw GitServiceError.commandFailed("Git operations are not supported on this platform.")
+        #endif
     }
 }

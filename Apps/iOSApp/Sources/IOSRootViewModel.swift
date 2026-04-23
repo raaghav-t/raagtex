@@ -14,6 +14,8 @@ final class IOSRootViewModel: ObservableObject {
             if selectedEditorTex.isEmpty {
                 selectedEditorTex = selectedMainTex
             }
+            documentState.mainFileRelativePath = selectedMainTex
+            _ = refreshPreviewFromExistingPDFIfAvailable()
             persistSettings()
         }
     }
@@ -26,6 +28,12 @@ final class IOSRootViewModel: ObservableObject {
     @Published var selectedEngine: CompileEngine = .pdfLaTeX {
         didSet {
             guard oldValue != selectedEngine else { return }
+            persistSettings()
+        }
+    }
+    @Published var editorPreviewLayout: EditorPreviewLayout = .leftRight {
+        didSet {
+            guard oldValue != editorPreviewLayout else { return }
             persistSettings()
         }
     }
@@ -50,7 +58,7 @@ final class IOSRootViewModel: ObservableObject {
     init(
         recentStore: any RecentProjectsStore = UserDefaultsRecentProjectsStore(),
         settingsStore: any SettingsStore = UserDefaultsSettingsStore(),
-        compileRunner: any CompileRunning = LatexmkCompileRunner()
+        compileRunner: any CompileRunning = CompileRunnerFactory.makeDefault()
     ) {
         self.recentStore = recentStore
         self.settingsStore = settingsStore
@@ -72,6 +80,7 @@ final class IOSRootViewModel: ObservableObject {
 
         let settings = settingsStore.load(projectRootPath: normalized.path)
         selectedEngine = settings.latexEngine
+        editorPreviewLayout = settings.editorPreviewLayout
         if let preferred = settings.mainTexRelativePath, files.contains(preferred) {
             selectedMainTex = preferred
         } else if files.contains("main.tex") {
@@ -86,6 +95,7 @@ final class IOSRootViewModel: ObservableObject {
 
         documentState.projectRoot = normalized
         documentState.mainFileRelativePath = selectedMainTex
+        _ = refreshPreviewFromExistingPDFIfAvailable()
 
         pushRecentProject(url: normalized)
         bannerMessage = "Opened \(normalized.lastPathComponent)"
@@ -137,38 +147,78 @@ final class IOSRootViewModel: ObservableObject {
             return
         }
 
-        let request = CompileRequest(
-            projectRoot: root,
-            mainFileRelativePath: selectedMainTex,
-            engine: selectedEngine,
-            autoCompile: false
-        )
-
-        isCompiling = true
-        documentState.compileStatus = .running
-        documentState.mainFileRelativePath = selectedMainTex
         documentState.projectRoot = root
-
-        Task { [weak self] in
-            guard let self else { return }
-            do {
-                let result = try await compileRunner.compile(request)
-                documentState.compileStatus = result.status
-                documentState.diagnostics = result.diagnostics
-                documentState.rawCompileLog = result.rawLog
-                documentState.pdfURL = result.pdfURL
-                documentState.lastCompileAt = result.finishedAt
-                bannerMessage = result.status == .succeeded
-                    ? "Compile succeeded"
-                    : "Compile finished with issues"
-            } catch {
-                documentState.compileStatus = .failed
-                documentState.rawCompileLog = error.localizedDescription
-                documentState.diagnostics = []
-                bannerMessage = "Compile failed: \(error.localizedDescription)"
-            }
-            isCompiling = false
+        documentState.mainFileRelativePath = selectedMainTex
+        if let fallbackPDFURL = refreshPreviewFromExistingPDFIfAvailable(mainRelativePath: selectedMainTex) {
+            documentState.compileStatus = .succeeded
+            documentState.rawCompileLog = "Artifact refresh mode (iPad): loaded an existing PDF artifact. Build on Mac to regenerate."
+            documentState.diagnostics = []
+            documentState.lastCompileAt = Date()
+            bannerMessage = "Artifact refresh mode: loaded \(fallbackPDFURL.lastPathComponent). Build on Mac to regenerate."
+        } else {
+            documentState.compileStatus = .failed
+            documentState.rawCompileLog = "Artifact refresh mode (iPad): no compiled PDF artifact found."
+            documentState.diagnostics = []
+            bannerMessage = "Artifact refresh mode: no compiled PDF found for \(selectedMainTex). Build on Mac first."
         }
+        return
+    }
+
+    @discardableResult
+    private func refreshPreviewFromExistingPDFIfAvailable(mainRelativePath: String? = nil) -> URL? {
+        guard let root = projectRoot else { return nil }
+        let mainPath = (mainRelativePath ?? selectedMainTex).trimmingCharacters(in: .whitespacesAndNewlines)
+        guard mainPath.isEmpty == false else {
+            documentState.pdfURL = nil
+            return nil
+        }
+
+        let mainFileURL = root.appendingPathComponent(mainPath)
+        let baseName = mainFileURL.deletingPathExtension().lastPathComponent
+        let expectedURL = mainFileURL.deletingPathExtension().appendingPathExtension("pdf")
+        let rootCandidate = root.appendingPathComponent(expectedURL.lastPathComponent)
+        var candidates = [expectedURL]
+        if rootCandidate.path != expectedURL.path {
+            candidates.append(rootCandidate)
+        }
+
+        if let enumerator = FileManager.default.enumerator(
+            at: root,
+            includingPropertiesForKeys: [.contentModificationDateKey],
+            options: [.skipsHiddenFiles, .skipsPackageDescendants]
+        ) {
+            for case let fileURL as URL in enumerator {
+                guard fileURL.pathExtension.caseInsensitiveCompare("pdf") == .orderedSame else { continue }
+                guard fileURL.deletingPathExtension().lastPathComponent == baseName else { continue }
+                candidates.append(fileURL)
+            }
+        }
+
+        var deduped: [URL] = []
+        var seen = Set<String>()
+        for candidate in candidates {
+            let key = candidate.standardizedFileURL.path
+            if seen.insert(key).inserted {
+                deduped.append(candidate)
+            }
+        }
+
+        let existing = deduped.compactMap { url -> (URL, Date)? in
+            guard FileManager.default.fileExists(atPath: url.path) else { return nil }
+            let modified = (try? url.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
+            return (url, modified)
+        }
+        .sorted { lhs, rhs in
+            lhs.1 > rhs.1
+        }
+
+        if let matched = existing.first?.0 {
+            documentState.pdfURL = matched
+            return matched
+        }
+
+        documentState.pdfURL = nil
+        return nil
     }
 
     func clearBanner() {
@@ -215,6 +265,7 @@ final class IOSRootViewModel: ObservableObject {
         var settings = settingsStore.load(projectRootPath: projectRoot.path)
         settings.mainTexRelativePath = selectedMainTex.isEmpty ? nil : selectedMainTex
         settings.latexEngine = selectedEngine
+        settings.editorPreviewLayout = editorPreviewLayout
         settingsStore.save(settings, projectRootPath: projectRoot.path)
     }
 
@@ -225,78 +276,12 @@ final class IOSRootViewModel: ObservableObject {
 
 private enum IOSProjectScanner {
     static func findTexFiles(projectRoot: URL) -> [String] {
-<<<<<<< ours
-<<<<<<< ours
-<<<<<<< ours
-<<<<<<< ours
-<<<<<<< ours
-<<<<<<< ours
-<<<<<<< ours
-<<<<<<< ours
-<<<<<<< ours
-<<<<<<< ours
-<<<<<<< ours
         let normalizedRoot = projectRoot.standardizedFileURL
         let rootPath = normalizedRoot.path
         let rootPathPrefix = rootPath.hasSuffix("/") ? rootPath : rootPath + "/"
 
         guard let enumerator = FileManager.default.enumerator(
             at: normalizedRoot,
-=======
-        let fm = FileManager.default
-        guard let enumerator = fm.enumerator(
-            at: projectRoot,
->>>>>>> theirs
-=======
-        let fm = FileManager.default
-        guard let enumerator = fm.enumerator(
-            at: projectRoot,
->>>>>>> theirs
-=======
-        let fm = FileManager.default
-        guard let enumerator = fm.enumerator(
-            at: projectRoot,
->>>>>>> theirs
-=======
-        let fm = FileManager.default
-        guard let enumerator = fm.enumerator(
-            at: projectRoot,
->>>>>>> theirs
-=======
-        let fm = FileManager.default
-        guard let enumerator = fm.enumerator(
-            at: projectRoot,
->>>>>>> theirs
-=======
-        let fm = FileManager.default
-        guard let enumerator = fm.enumerator(
-            at: projectRoot,
->>>>>>> theirs
-=======
-        let fm = FileManager.default
-        guard let enumerator = fm.enumerator(
-            at: projectRoot,
->>>>>>> theirs
-=======
-        let fm = FileManager.default
-        guard let enumerator = fm.enumerator(
-            at: projectRoot,
->>>>>>> theirs
-=======
-        let fm = FileManager.default
-        guard let enumerator = fm.enumerator(
-            at: projectRoot,
->>>>>>> theirs
-=======
-        let fm = FileManager.default
-        guard let enumerator = fm.enumerator(
-            at: projectRoot,
->>>>>>> theirs
-=======
-        let fm = FileManager.default
-        guard let enumerator = fm.enumerator(
-            at: projectRoot,
->>>>>>> theirs
             includingPropertiesForKeys: [.isDirectoryKey],
             options: [.skipsHiddenFiles, .skipsPackageDescendants]
         ) else {
@@ -305,17 +290,6 @@ private enum IOSProjectScanner {
 
         var paths: [String] = []
         for case let fileURL as URL in enumerator {
-<<<<<<< ours
-<<<<<<< ours
-<<<<<<< ours
-<<<<<<< ours
-<<<<<<< ours
-<<<<<<< ours
-<<<<<<< ours
-<<<<<<< ours
-<<<<<<< ours
-<<<<<<< ours
-<<<<<<< ours
             let relativePath = relativePath(for: fileURL, rootPathPrefix: rootPathPrefix)
             if shouldSkipGeneratedDirectory(relativePath: relativePath, at: fileURL) {
                 enumerator.skipDescendants()
@@ -341,66 +315,5 @@ private enum IOSProjectScanner {
         guard lower.hasPrefix("_minted-") || lower.contains("/_minted-") else { return false }
         let isDirectory = (try? fileURL.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) ?? false
         return isDirectory
-=======
-=======
->>>>>>> theirs
-=======
->>>>>>> theirs
-=======
->>>>>>> theirs
-=======
->>>>>>> theirs
-=======
->>>>>>> theirs
-=======
->>>>>>> theirs
-=======
->>>>>>> theirs
-=======
->>>>>>> theirs
-=======
->>>>>>> theirs
-=======
->>>>>>> theirs
-            if fileURL.pathExtension.lowercased() != "tex" {
-                continue
-            }
-
-            let relative = fileURL.path.replacingOccurrences(of: projectRoot.path + "/", with: "")
-            paths.append(relative)
-        }
-
-        return paths.sorted()
-<<<<<<< ours
-<<<<<<< ours
-<<<<<<< ours
-<<<<<<< ours
-<<<<<<< ours
-<<<<<<< ours
-<<<<<<< ours
-<<<<<<< ours
-<<<<<<< ours
-<<<<<<< ours
->>>>>>> theirs
-=======
->>>>>>> theirs
-=======
->>>>>>> theirs
-=======
->>>>>>> theirs
-=======
->>>>>>> theirs
-=======
->>>>>>> theirs
-=======
->>>>>>> theirs
-=======
->>>>>>> theirs
-=======
->>>>>>> theirs
-=======
->>>>>>> theirs
-=======
->>>>>>> theirs
     }
 }
