@@ -41,6 +41,11 @@ struct LatexSyntaxEditorView: NSViewRepresentable {
         scrollView.hasVerticalScroller = true
         scrollView.hasHorizontalScroller = false
         scrollView.drawsBackground = false
+        let snappingClipView = LineSnappingClipView()
+        snappingClipView.trackedTextView = textView
+        snappingClipView.drawsBackground = false
+        snappingClipView.backgroundColor = .clear
+        scrollView.contentView = snappingClipView
         scrollView.documentView = textView
 
         let lineNumberRuler = LineNumberRulerView(textView: textView)
@@ -712,6 +717,51 @@ private final class LatexTextView: NSTextView {
         } else {
             return caretOffsetInLine > indentCount ? 2 : 0
         }
+    }
+}
+
+private final class LineSnappingClipView: NSClipView {
+    weak var trackedTextView: NSTextView?
+
+    override var isOpaque: Bool { false }
+
+    override func constrainBoundsRect(_ proposedBounds: NSRect) -> NSRect {
+        var constrained = super.constrainBoundsRect(proposedBounds)
+        guard
+            let textView = trackedTextView,
+            let layoutManager = textView.layoutManager,
+            let font = textView.font
+        else {
+            return constrained
+        }
+
+        let lineHeight = layoutManager.defaultLineHeight(for: font)
+        guard lineHeight > 0 else {
+            return constrained
+        }
+
+        let verticalInset = textView.textContainerInset.height
+        let translatedY = constrained.origin.y - verticalInset
+        let currentTranslatedY = bounds.origin.y - verticalInset
+        let proposedLineOffset = translatedY / lineHeight
+        let currentLineOffset = currentTranslatedY / lineHeight
+
+        let snappedLineOffset: CGFloat
+        if proposedLineOffset > currentLineOffset {
+            // Scrolling down: only reveal the next line once a full line delta is reached.
+            snappedLineOffset = floor(proposedLineOffset)
+        } else if proposedLineOffset < currentLineOffset {
+            // Scrolling up: only reveal the previous line once a full line delta is reached.
+            snappedLineOffset = ceil(proposedLineOffset)
+        } else {
+            snappedLineOffset = proposedLineOffset
+        }
+
+        let snappedY = snappedLineOffset * lineHeight + verticalInset
+        let minY = documentRect.minY
+        let maxY = max(minY, documentRect.maxY - constrained.height)
+        constrained.origin.y = min(max(snappedY, minY), maxY)
+        return constrained
     }
 }
 
