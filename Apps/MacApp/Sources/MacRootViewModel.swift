@@ -33,6 +33,7 @@ final class MacRootViewModel: ObservableObject {
         didSet {
             guard oldValue != selectedEngine else { return }
             persistSettings()
+            refreshLatexToolchainStatus()
         }
     }
 
@@ -291,6 +292,7 @@ final class MacRootViewModel: ObservableObject {
     @Published private(set) var debugLastCompileStartedAt: Date?
     @Published private(set) var debugLastCompileFinishedAt: Date?
     @Published private(set) var debugLastPDFDisplayedAt: Date?
+    @Published private(set) var latexToolchainIssue: LatexToolchainStatus?
 
     enum LogTab: String, CaseIterable {
         case diagnostics = "Diagnostics"
@@ -412,6 +414,14 @@ final class MacRootViewModel: ObservableObject {
         diagnostics(forRelativePath: selectedEditorTex)
     }
 
+    var latexSetupSummary: String {
+        latexToolchainIssue?.primaryMessage ?? "TeX setup ready"
+    }
+
+    var latexSetupDetail: String {
+        latexToolchainIssue?.recoveryMessage ?? "latexmk and the selected engine are available."
+    }
+
     func openProject(url: URL) {
         projectRoot = url
         applyProjectScan(ProjectScanner.scan(projectRoot: url))
@@ -422,6 +432,7 @@ final class MacRootViewModel: ObservableObject {
         documentState.mainFileRelativePath = selectedMainTex
         updatePreviewFromExistingPDFIfAvailable()
         refreshCompilePreflightError()
+        refreshLatexToolchainStatus()
         lastAutoCompileInputFingerprint = currentTexInputFingerprint()
 
         pushRecentProject(url)
@@ -699,6 +710,13 @@ final class MacRootViewModel: ObservableObject {
         }
         compilePreflightError = nil
 
+        let toolchainStatus = LatexToolchainProbe.check(engine: selectedEngine)
+        latexToolchainIssue = toolchainStatus.isReady ? nil : toolchainStatus
+        guard toolchainStatus.isReady else {
+            failCompileForMissingToolchain(toolchainStatus)
+            return
+        }
+
         if editorAutoCorrectEnabled {
             runAutoCorrect()
         }
@@ -761,9 +779,10 @@ final class MacRootViewModel: ObservableObject {
                     self.documentState.lastCompileAt = result.finishedAt
                     self.documentState.pdfURL = result.pdfURL
                     self.debugLastCompileFinishedAt = result.finishedAt
+                    self.refreshLatexToolchainStatus()
 
                     if result.status == .failed {
-                        self.bannerMessage = "Compile failed. Review diagnostics."
+                        self.bannerMessage = self.compileFailureBanner(for: result.rawLog)
                     }
                 }
             } catch {
@@ -775,9 +794,32 @@ final class MacRootViewModel: ObservableObject {
                     ]
                     self.debugLastCompileFinishedAt = Date()
                     self.bannerMessage = "Compile failed: \(error.localizedDescription)"
+                    self.refreshLatexToolchainStatus()
                 }
             }
         }
+    }
+
+    func recheckLatexSetup() {
+        refreshLatexToolchainStatus()
+        bannerMessage = latexToolchainIssue == nil ? "TeX setup ready." : latexSetupSummary
+    }
+
+    func dismissLatexSetupIssue() {
+        latexToolchainIssue = nil
+    }
+
+    func openMacTeXDownload() {
+        NSWorkspace.shared.open(LatexToolchainProbe.macTeXDownloadURL)
+    }
+
+    func openBasicTeXDownload() {
+        NSWorkspace.shared.open(LatexToolchainProbe.basicTeXDownloadURL)
+    }
+
+    func copyBasicTeXInstallCommand() {
+        writeStringsToPasteboard([LatexToolchainProbe.basicTeXInstallCommand])
+        bannerMessage = "Copied BasicTeX install command."
     }
 
     func userChangedMainFile(_ value: String) {
@@ -2167,6 +2209,37 @@ final class MacRootViewModel: ObservableObject {
         let board = NSPasteboard.general
         board.clearContents()
         board.writeObjects(values as [NSString])
+    }
+
+    private func refreshLatexToolchainStatus() {
+        let status = LatexToolchainProbe.check(engine: selectedEngine)
+        latexToolchainIssue = status.isReady ? nil : status
+    }
+
+    private func failCompileForMissingToolchain(_ status: LatexToolchainStatus) {
+        documentState.compileStatus = .failed
+        documentState.mainFileRelativePath = selectedMainTex
+        documentState.rawCompileLog = """
+        [raagtex] \(status.primaryMessage)
+        [raagtex] \(status.recoveryMessage)
+        [raagtex] Effective PATH: \(status.searchPath)
+        """
+        documentState.diagnostics = [
+            CompileDiagnostic(severity: .error, message: "\(status.primaryMessage). \(status.recoveryMessage)")
+        ]
+        documentState.lastCompileAt = Date()
+        debugLastCompileFinishedAt = Date()
+        selectedLogTab = .diagnostics
+        bannerMessage = status.primaryMessage
+    }
+
+    private func compileFailureBanner(for rawLog: String) -> String {
+        let lowercasedLog = rawLog.lowercased()
+        let hasMissingStyle = lowercasedLog.contains("file `") && lowercasedLog.contains(".sty' not found")
+        if lowercasedLog.contains("not found") || hasMissingStyle {
+            return "Compile failed. A TeX package or tool may be missing."
+        }
+        return "Compile failed. Review diagnostics."
     }
 
     private func scheduleBannerAutoDismiss() {

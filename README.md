@@ -22,6 +22,7 @@ Functional Apple-platform baseline:
 - Choose compile engine (`pdflatex`, `xelatex`, `lualatex`) and compile via `latexmk`
 - Optional Speed Compile mode asks `graphicx` to render included figures as placeholders for faster draft builds
 - macOS compile runner now resolves TeX tool paths more robustly (including `/Library/TeX/texbin`) for GUI-launched builds
+- macOS setup notice detects missing `latexmk`/engine prerequisites and offers MacTeX/BasicTeX install actions plus a recheck
 - iPad compile action runs an embedded SwiftLaTeX runtime (`pdfTeX` / `xeTeX + dvipdfmx`) and writes generated PDFs back into the project folder
 - iPad compile action falls back to showing the latest generated PDF artifact if a compile attempt fails
 - Preflight main-file validation blocks compile when required document structure is missing (`\documentclass` first non-comment line, plus `\begin{document}`)

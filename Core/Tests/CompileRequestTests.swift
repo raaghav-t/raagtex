@@ -25,4 +25,23 @@ final class CompileRequestTests: XCTestCase {
 
         XCTAssertTrue(request.speedCompileEnabled)
     }
+
+    func testLatexToolchainProbeReportsMissingExecutables() {
+        let status = LatexToolchainProbe.check(
+            engine: .pdfLaTeX,
+            environment: ["PATH": "/tmp/raagtex-toolchain-does-not-exist"],
+            includeDefaultToolPaths: false
+        )
+
+        XCTAssertFalse(status.isReady)
+        XCTAssertEqual(status.missingExecutables, ["latexmk", "pdflatex"])
+        XCTAssertTrue(status.primaryMessage.contains("latexmk"))
+        XCTAssertTrue(status.recoveryMessage.contains("MacTeX"))
+    }
+
+    func testLatexToolchainSearchPathAddsMacTeXLocation() {
+        let path = LatexToolchainProbe.latexToolSearchPath(environment: ["PATH": "/usr/bin"])
+
+        XCTAssertTrue(path.split(separator: ":").contains("/Library/TeX/texbin"))
+    }
 }

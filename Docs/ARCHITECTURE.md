@@ -14,6 +14,7 @@ V1 baseline is implemented for local macOS workflows, plus a native iPad workspa
 - main-file/engine settings persistence
 - `latexmk` compile runner and diagnostics parser
 - macOS Speed Compile mode passes `\PassOptionsToPackage{draft}{graphicx}` through `latexmk -usepretex` so figure-heavy drafts render placeholders without modifying source files
+- macOS TeX setup probing checks `latexmk` plus the selected engine before compile and surfaces install/recheck actions when prerequisites are missing
 - PDF preview shell and compile output panes
 - auto-compile watcher with debounce and coalesced refresh scheduling (to avoid repeated full-tree scans)
 - macOS template library surfaces for document/style `.tex` templates with a file-menu manager and add-style flow

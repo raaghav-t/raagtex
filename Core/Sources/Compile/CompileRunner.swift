@@ -106,6 +106,127 @@ public enum CompileRunnerError: Error, LocalizedError {
     }
 }
 
+public struct LatexToolchainStatus: Equatable, Sendable {
+    public var requiredExecutables: [String]
+    public var executablePaths: [String: String]
+    public var missingExecutables: [String]
+    public var searchPath: String
+
+    public init(
+        requiredExecutables: [String],
+        executablePaths: [String: String],
+        missingExecutables: [String],
+        searchPath: String
+    ) {
+        self.requiredExecutables = requiredExecutables
+        self.executablePaths = executablePaths
+        self.missingExecutables = missingExecutables
+        self.searchPath = searchPath
+    }
+
+    public var isReady: Bool {
+        missingExecutables.isEmpty
+    }
+
+    public var primaryMessage: String {
+        if missingExecutables.isEmpty {
+            return "TeX toolchain ready."
+        }
+        return "Missing TeX tool: " + missingExecutables.joined(separator: ", ")
+    }
+
+    public var recoveryMessage: String {
+        if missingExecutables.contains("latexmk") {
+            return "Install MacTeX or BasicTeX, then reopen raagtex or recheck setup."
+        }
+        return "The selected compile engine is unavailable. Install the matching TeX package or choose another engine."
+    }
+}
+
+public enum LatexToolchainProbe {
+    public static let macTeXDownloadURL = URL(string: "https://tug.org/mactex/mactex-download.html")!
+    public static let basicTeXDownloadURL = URL(string: "https://tug.org/mactex/morepackages.html")!
+    public static let basicTeXInstallCommand = "brew install --cask basictex && sudo tlmgr update --self && sudo tlmgr install latexmk"
+
+    public static func check(
+        engine: CompileEngine,
+        environment: [String: String] = ProcessInfo.processInfo.environment,
+        includeDefaultToolPaths: Bool = true
+    ) -> LatexToolchainStatus {
+        let searchPath = latexToolSearchPath(
+            environment: environment,
+            includeDefaultToolPaths: includeDefaultToolPaths
+        )
+        let required = uniqueExecutables(["latexmk", engine.rawValue])
+        var executablePaths: [String: String] = [:]
+        var missing: [String] = []
+
+        for executable in required {
+            if let path = resolveExecutable(named: executable, searchPath: searchPath) {
+                executablePaths[executable] = path
+            } else {
+                missing.append(executable)
+            }
+        }
+
+        return LatexToolchainStatus(
+            requiredExecutables: required,
+            executablePaths: executablePaths,
+            missingExecutables: missing,
+            searchPath: searchPath
+        )
+    }
+
+    public static func latexToolSearchPath(
+        environment: [String: String] = ProcessInfo.processInfo.environment,
+        includeDefaultToolPaths: Bool = true
+    ) -> String {
+        let base = environment["PATH"] ?? ""
+        var candidates = base.split(separator: ":").map(String.init)
+        if includeDefaultToolPaths {
+            candidates.append(contentsOf: [
+                "/Library/TeX/texbin",
+                "/opt/homebrew/bin",
+                "/usr/local/bin",
+                "/usr/bin",
+                "/bin",
+                "/usr/sbin",
+                "/sbin"
+            ])
+        }
+
+        var unique: [String] = []
+        var seen = Set<String>()
+        for candidate in candidates where candidate.isEmpty == false {
+            if seen.insert(candidate).inserted {
+                unique.append(candidate)
+            }
+        }
+        return unique.joined(separator: ":")
+    }
+
+    public static func resolveExecutable(named command: String, searchPath: String) -> String? {
+        let fileManager = FileManager.default
+        let segments = searchPath.split(separator: ":").map(String.init)
+        for segment in segments {
+            let candidate = URL(fileURLWithPath: segment).appendingPathComponent(command).path
+            if fileManager.isExecutableFile(atPath: candidate) {
+                return candidate
+            }
+        }
+        return nil
+    }
+
+    private static func uniqueExecutables(_ executables: [String]) -> [String] {
+        var unique: [String] = []
+        var seen = Set<String>()
+        for executable in executables where seen.insert(executable).inserted {
+            unique.append(executable)
+        }
+        return unique
+    }
+}
+
 public protocol CompileRunning: Sendable {
     func compile(_ request: CompileRequest) async throws -> CompileResult
 }
@@ -147,10 +268,16 @@ public struct LatexmkCompileRunner: CompileRunning {
             "Local latexmk execution is unavailable on iOS/iPadOS. Compile on macOS and sync the output PDF."
         )
         #else
-        let searchPath = latexToolSearchPath()
-        guard let latexmkExecutable = resolveExecutable(named: "latexmk", searchPath: searchPath) else {
+        let toolchain = LatexToolchainProbe.check(engine: request.engine)
+        let searchPath = toolchain.searchPath
+        guard let latexmkExecutable = toolchain.executablePaths["latexmk"] else {
             throw CompileRunnerError.launchFailed(
-                "latexmk was not found on PATH. Install a TeX distribution (for example, MacTeX) and ensure latexmk is available. Effective PATH: \(searchPath)"
+                "\(toolchain.primaryMessage). \(toolchain.recoveryMessage) Effective PATH: \(searchPath)"
+            )
+        }
+        if toolchain.isReady == false {
+            throw CompileRunnerError.launchFailed(
+                "\(toolchain.primaryMessage). \(toolchain.recoveryMessage) Effective PATH: \(searchPath)"
             )
         }
 
@@ -213,41 +340,6 @@ public struct LatexmkCompileRunner: CompileRunning {
         let rawLog = String(data: outputData, encoding: .utf8) ?? ""
         return (process.terminationStatus, rawLog)
         #endif
-    }
-
-    private func latexToolSearchPath() -> String {
-        let base = ProcessInfo.processInfo.environment["PATH"] ?? ""
-        var candidates = base.split(separator: ":").map(String.init)
-        candidates.append(contentsOf: [
-            "/Library/TeX/texbin",
-            "/opt/homebrew/bin",
-            "/usr/local/bin",
-            "/usr/bin",
-            "/bin",
-            "/usr/sbin",
-            "/sbin"
-        ])
-
-        var unique: [String] = []
-        var seen = Set<String>()
-        for candidate in candidates where candidate.isEmpty == false {
-            if seen.insert(candidate).inserted {
-                unique.append(candidate)
-            }
-        }
-        return unique.joined(separator: ":")
-    }
-
-    private func resolveExecutable(named command: String, searchPath: String) -> String? {
-        let fileManager = FileManager.default
-        let segments = searchPath.split(separator: ":").map(String.init)
-        for segment in segments {
-            let candidate = URL(fileURLWithPath: segment).appendingPathComponent(command).path
-            if fileManager.isExecutableFile(atPath: candidate) {
-                return candidate
-            }
-        }
-        return nil
     }
 
     private func mergedEnvironment(path: String) -> [String: String] {

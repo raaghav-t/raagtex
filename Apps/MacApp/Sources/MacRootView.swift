@@ -176,25 +176,106 @@ struct MacRootView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
-            contentSplit
-                .padding(.horizontal, 12)
-                .padding(.bottom, 12)
-                .padding(.top, 16)
-                .overlay(alignment: .top) {
-                    if let banner = viewModel.bannerMessage {
-                        Text(banner)
-                            .font(.footnote)
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 6)
-                            .background(.thinMaterial, in: Capsule())
-                            .padding(.top, 8)
-                            .transition(.opacity)
-                            .onTapGesture {
-                                viewModel.clearBanner()
-                            }
-                    }
+            VStack(spacing: 10) {
+                if viewModel.latexToolchainIssue != nil {
+                    latexSetupNotice
+                        .transition(.opacity.combined(with: .move(edge: .top)))
                 }
-                .animation(.easeInOut(duration: 0.2), value: viewModel.bannerMessage)
+
+                contentSplit
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .padding(.horizontal, 12)
+            .padding(.bottom, 12)
+            .padding(.top, 16)
+            .overlay(alignment: .top) {
+                if let banner = viewModel.bannerMessage {
+                    Text(banner)
+                        .font(.footnote)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(.thinMaterial, in: Capsule())
+                        .padding(.top, 8)
+                        .transition(.opacity)
+                        .onTapGesture {
+                            viewModel.clearBanner()
+                        }
+                }
+            }
+            .animation(.easeInOut(duration: 0.2), value: viewModel.bannerMessage)
+            .animation(.easeInOut(duration: 0.2), value: viewModel.latexToolchainIssue)
+        }
+    }
+
+    private var latexSetupNotice: some View {
+        HStack(alignment: .center, spacing: 12) {
+            Image(systemName: "wrench.and.screwdriver")
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(activeTint)
+                .frame(width: 24, height: 24)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(viewModel.latexSetupSummary)
+                    .font(.subheadline.weight(.semibold))
+                    .lineLimit(1)
+                Text(viewModel.latexSetupDetail)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+            }
+
+            Spacer(minLength: 8)
+
+            HStack(spacing: 6) {
+                Button {
+                    viewModel.recheckLatexSetup()
+                } label: {
+                    Image(systemName: "arrow.clockwise")
+                        .frame(width: 18, height: 18)
+                }
+                .help("Recheck TeX setup")
+
+                Menu {
+                    Button {
+                        viewModel.openMacTeXDownload()
+                    } label: {
+                        Label("Open MacTeX", systemImage: "arrow.down.circle")
+                    }
+
+                    Button {
+                        viewModel.openBasicTeXDownload()
+                    } label: {
+                        Label("Open BasicTeX", systemImage: "shippingbox")
+                    }
+
+                    Button {
+                        viewModel.copyBasicTeXInstallCommand()
+                    } label: {
+                        Label("Copy BasicTeX Command", systemImage: "doc.on.doc")
+                    }
+                } label: {
+                    Image(systemName: "arrow.down.circle")
+                        .frame(width: 18, height: 18)
+                }
+                .help("TeX install options")
+
+                Button {
+                    viewModel.dismissLatexSetupIssue()
+                } label: {
+                    Image(systemName: "xmark")
+                        .frame(width: 18, height: 18)
+                }
+                .help("Dismiss")
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 9)
+        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .stroke(Color.primary.opacity(0.08), lineWidth: 1)
         }
     }
 

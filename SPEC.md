@@ -29,6 +29,7 @@ raagtex is a calm, native Apple experience for local LaTeX workflows: write in y
   - one-click style insertion into current project (`File -> Add Style…`)
 - Compile via `latexmk`
 - Speed Compile mode that replaces `graphicx` figures with placeholders for faster drafting on image-heavy documents
+- macOS TeX setup notice for missing `latexmk` or selected-engine prerequisites, with MacTeX/BasicTeX setup actions
 - Preflight guard that blocks compile attempts when the selected main file is not a valid document shell (`\documentclass` + `\begin{document}`)
 - Basic structured compile output model with macOS inline editor diagnostics for line-specific errors
 - PDF preview pane with optional pop-out viewer window and directional editor/preview layouts (left-right, right-left, top-bottom, bottom-top) plus an editor-only mode (no PDF pane)
@@ -67,6 +68,7 @@ raagtex is a calm, native Apple experience for local LaTeX workflows: write in y
 - Shared reusable module boundaries for models/services
 - Keep third-party dependencies minimal unless justified
 - Local compile execution with `latexmk` (system TeX install)
+- The app may guide users to install TeX prerequisites, but should not silently run privileged installers or mutate TeX distributions without explicit user action
 
 ## Risks / Open Questions
 - TeX distribution compatibility differences across user environments
