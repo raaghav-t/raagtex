@@ -58,7 +58,9 @@ final class IOSRootViewModel: ObservableObject {
     init(
         recentStore: any RecentProjectsStore = UserDefaultsRecentProjectsStore(),
         settingsStore: any SettingsStore = UserDefaultsSettingsStore(),
-        compileRunner: any CompileRunning = CompileRunnerFactory.makeDefault()
+        compileRunner: any CompileRunning = CompileRunnerFactory.makeDefault(
+            iosBackend: IOSSwiftLaTeXCompileRunner()
+        )
     ) {
         self.recentStore = recentStore
         self.settingsStore = settingsStore
@@ -147,21 +149,72 @@ final class IOSRootViewModel: ObservableObject {
             return
         }
 
+        if isCompiling {
+            return
+        }
+
         documentState.projectRoot = root
         documentState.mainFileRelativePath = selectedMainTex
-        if let fallbackPDFURL = refreshPreviewFromExistingPDFIfAvailable(mainRelativePath: selectedMainTex) {
-            documentState.compileStatus = .succeeded
-            documentState.rawCompileLog = "Artifact refresh mode (iPad): loaded an existing PDF artifact. Build on Mac to regenerate."
-            documentState.diagnostics = []
-            documentState.lastCompileAt = Date()
-            bannerMessage = "Artifact refresh mode: loaded \(fallbackPDFURL.lastPathComponent). Build on Mac to regenerate."
-        } else {
-            documentState.compileStatus = .failed
-            documentState.rawCompileLog = "Artifact refresh mode (iPad): no compiled PDF artifact found."
-            documentState.diagnostics = []
-            bannerMessage = "Artifact refresh mode: no compiled PDF found for \(selectedMainTex). Build on Mac first."
+        documentState.compileStatus = .running
+        documentState.rawCompileLog = ""
+        documentState.diagnostics = []
+        bannerMessage = nil
+        isCompiling = true
+
+        let request = CompileRequest(
+            projectRoot: root,
+            mainFileRelativePath: selectedMainTex,
+            engine: selectedEngine,
+            autoCompile: false
+        )
+
+        Task {
+            defer {
+                Task { @MainActor in
+                    self.isCompiling = false
+                }
+            }
+
+            do {
+                let runner = compileRunner
+                let result = try await Task.detached(priority: .userInitiated) {
+                    try await runner.compile(request)
+                }.value
+
+                await MainActor.run {
+                    self.documentState.compileStatus = result.status
+                    self.documentState.rawCompileLog = result.rawLog
+                    self.documentState.diagnostics = result.diagnostics
+                    self.documentState.lastCompileAt = result.finishedAt
+                    self.documentState.pdfURL = result.pdfURL
+
+                    if result.status == .succeeded {
+                        if let pdfURL = result.pdfURL {
+                            self.bannerMessage = "Compiled \(pdfURL.lastPathComponent)"
+                        } else {
+                            self.bannerMessage = "Compile finished, but no PDF was produced."
+                        }
+                    } else {
+                        self.bannerMessage = "Compile failed. Review diagnostics."
+                    }
+                }
+            } catch {
+                await MainActor.run {
+                    self.documentState.compileStatus = .failed
+                    self.documentState.rawCompileLog = error.localizedDescription
+                    self.documentState.diagnostics = [
+                        CompileDiagnostic(severity: .error, message: error.localizedDescription)
+                    ]
+                    self.documentState.lastCompileAt = Date()
+
+                    if let fallbackPDFURL = self.refreshPreviewFromExistingPDFIfAvailable(mainRelativePath: self.selectedMainTex) {
+                        self.bannerMessage = "Compile failed, loaded latest existing PDF (\(fallbackPDFURL.lastPathComponent))."
+                    } else {
+                        self.bannerMessage = "Compile failed: \(error.localizedDescription)"
+                    }
+                }
+            }
         }
-        return
     }
 
     @discardableResult

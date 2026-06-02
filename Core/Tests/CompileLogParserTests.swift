@@ -25,4 +25,31 @@ final class CompileLogParserTests: XCTestCase {
         XCTAssertEqual(diagnostics[0].severity, .warning)
         XCTAssertEqual(diagnostics[1].severity, .error)
     }
+
+    func testAttachesLatexLineContextToBangError() {
+        let parser = CompileLogParser()
+        let log = """
+        ! Undefined control sequence.
+        l.12 \\badcommand
+        """
+
+        let diagnostics = parser.parse(log)
+
+        XCTAssertEqual(diagnostics.count, 1)
+        XCTAssertEqual(diagnostics[0].severity, .error)
+        XCTAssertEqual(diagnostics[0].line, 12)
+        XCTAssertTrue(diagnostics[0].message.contains("Undefined control sequence"))
+        XCTAssertTrue(diagnostics[0].message.contains("\\badcommand"))
+    }
+
+    func testParsesWarningLineNumber() {
+        let parser = CompileLogParser()
+        let log = "LaTeX Warning: Reference `x' on page 1 undefined on input line 27."
+
+        let diagnostics = parser.parse(log)
+
+        XCTAssertEqual(diagnostics.count, 1)
+        XCTAssertEqual(diagnostics[0].severity, .warning)
+        XCTAssertEqual(diagnostics[0].line, 27)
+    }
 }

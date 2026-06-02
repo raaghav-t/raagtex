@@ -8,4 +8,21 @@ final class CompileRequestTests: XCTestCase {
 
         XCTAssertEqual(request.expectedPDFURL.path, "/tmp/project/src/main.pdf")
     }
+
+    func testSpeedCompileDefaultsOff() {
+        let request = CompileRequest(projectRoot: URL(fileURLWithPath: "/tmp/project"), mainFileRelativePath: "main.tex")
+
+        XCTAssertFalse(request.speedCompileEnabled)
+        XCTAssertFalse(request.forceRebuild)
+    }
+
+    func testSpeedCompileCanBeEnabled() {
+        let request = CompileRequest(
+            projectRoot: URL(fileURLWithPath: "/tmp/project"),
+            mainFileRelativePath: "main.tex",
+            speedCompileEnabled: true
+        )
+
+        XCTAssertTrue(request.speedCompileEnabled)
+    }
 }

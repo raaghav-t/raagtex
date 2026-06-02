@@ -1,0 +1,428 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		1759E5624AF437A3AD35E435 /* IOSRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D97E8B3B919559A69FB9A25A /* IOSRootView.swift */; };
+		2FBB2F6D20B4B740366D42A5 /* swiftlatexpdftex.wasm in Resources */ = {isa = PBXBuildFile; fileRef = 8C572BB40955CF1F7BD44CA0 /* swiftlatexpdftex.wasm */; };
+		5D84C9F45C5C45F34B648BCF /* swiftlatexpdftex.js in Resources */ = {isa = PBXBuildFile; fileRef = E0C4E3BA4AEA61524EC639DA /* swiftlatexpdftex.js */; };
+		7957C16F532B96F7C58EBF69 /* PdfTeXEngine.js in Resources */ = {isa = PBXBuildFile; fileRef = 244641DFF787577A0C15839B /* PdfTeXEngine.js */; };
+		840B8CE276B2D2B137286D00 /* IOSSwiftLaTeXCompileRunner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6658D3CDE8FB06BAD7AC3616 /* IOSSwiftLaTeXCompileRunner.swift */; };
+		A29871E806B6ECF0051C26EE /* LaTeXCockpitIOSApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 387B09454613692EADFE5A5B /* LaTeXCockpitIOSApp.swift */; };
+		C95397E7FA7DE8FBE4F90523 /* XeTeXEngine.js in Resources */ = {isa = PBXBuildFile; fileRef = 342DA5C74075CE870F95AB39 /* XeTeXEngine.js */; };
+		CB6ACD5A6B5B7A6545493B24 /* swiftlatexdvipdfm.js in Resources */ = {isa = PBXBuildFile; fileRef = 2B9F64109A1DA2F08D1934E0 /* swiftlatexdvipdfm.js */; };
+		CC294CB4B2E7D338982684FB /* swiftlatexxetex.wasm in Resources */ = {isa = PBXBuildFile; fileRef = 4CF638624F0CB13166012B78 /* swiftlatexxetex.wasm */; };
+		DA25E7CFE725985FB221BE5B /* swiftlatexdvipdfm.wasm in Resources */ = {isa = PBXBuildFile; fileRef = 01EF04EE123E621A1A5FB288 /* swiftlatexdvipdfm.wasm */; };
+		EDDC42079EAE2EF44C6AC563 /* IOSRootViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2086A453817DE773482D7112 /* IOSRootViewModel.swift */; };
+		F09F520C9B17FD93F56164C2 /* README.txt in Resources */ = {isa = PBXBuildFile; fileRef = 0E0244B995EB9C76C74F1B4D /* README.txt */; };
+		F3663B10D7B74C8F9B7756FE /* swiftlatexxetex.js in Resources */ = {isa = PBXBuildFile; fileRef = CCD3E7FDB38BCF4B81EA1860 /* swiftlatexxetex.js */; };
+		F6CEB6251EE187441C027A78 /* Shared in Frameworks */ = {isa = PBXBuildFile; productRef = 046A000C5305A0346314E9AD /* Shared */; };
+		FC8BA29BC51E9D5448DFD04A /* Core in Frameworks */ = {isa = PBXBuildFile; productRef = FEA970A18EC286A45B5BDC54 /* Core */; };
+		FE16AFC3DE7E70F0531081B0 /* DvipdfmxEngine.js in Resources */ = {isa = PBXBuildFile; fileRef = 247CADBCBAAFC944102DE346 /* DvipdfmxEngine.js */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		01EF04EE123E621A1A5FB288 /* swiftlatexdvipdfm.wasm */ = {isa = PBXFileReference; path = swiftlatexdvipdfm.wasm; sourceTree = "<group>"; };
+		0E0244B995EB9C76C74F1B4D /* README.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = README.txt; sourceTree = "<group>"; };
+		17FADC0347E460FC94DF8377 /* raagtex-ios.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = "raagtex-ios.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		2086A453817DE773482D7112 /* IOSRootViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IOSRootViewModel.swift; sourceTree = "<group>"; };
+		244641DFF787577A0C15839B /* PdfTeXEngine.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = PdfTeXEngine.js; sourceTree = "<group>"; };
+		247CADBCBAAFC944102DE346 /* DvipdfmxEngine.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = DvipdfmxEngine.js; sourceTree = "<group>"; };
+		2B9F64109A1DA2F08D1934E0 /* swiftlatexdvipdfm.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = swiftlatexdvipdfm.js; sourceTree = "<group>"; };
+		342DA5C74075CE870F95AB39 /* XeTeXEngine.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = XeTeXEngine.js; sourceTree = "<group>"; };
+		387B09454613692EADFE5A5B /* LaTeXCockpitIOSApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LaTeXCockpitIOSApp.swift; sourceTree = "<group>"; };
+		4CF638624F0CB13166012B78 /* swiftlatexxetex.wasm */ = {isa = PBXFileReference; path = swiftlatexxetex.wasm; sourceTree = "<group>"; };
+		6658D3CDE8FB06BAD7AC3616 /* IOSSwiftLaTeXCompileRunner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IOSSwiftLaTeXCompileRunner.swift; sourceTree = "<group>"; };
+		8C572BB40955CF1F7BD44CA0 /* swiftlatexpdftex.wasm */ = {isa = PBXFileReference; path = swiftlatexpdftex.wasm; sourceTree = "<group>"; };
+		99F81FBCDAD9AE87FBBC1C77 /* raagtex */ = {isa = PBXFileReference; lastKnownFileType = folder; name = raagtex; path = ../../..; sourceTree = SOURCE_ROOT; };
+		CCD3E7FDB38BCF4B81EA1860 /* swiftlatexxetex.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = swiftlatexxetex.js; sourceTree = "<group>"; };
+		D97E8B3B919559A69FB9A25A /* IOSRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IOSRootView.swift; sourceTree = "<group>"; };
+		E0C4E3BA4AEA61524EC639DA /* swiftlatexpdftex.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = swiftlatexpdftex.js; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		747DE5A6CAECCC97EF88BE44 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				FC8BA29BC51E9D5448DFD04A /* Core in Frameworks */,
+				F6CEB6251EE187441C027A78 /* Shared in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		4FB857DFD625F6F04F16213A /* Sources */ = {
+			isa = PBXGroup;
+			children = (
+				D97E8B3B919559A69FB9A25A /* IOSRootView.swift */,
+				2086A453817DE773482D7112 /* IOSRootViewModel.swift */,
+				6658D3CDE8FB06BAD7AC3616 /* IOSSwiftLaTeXCompileRunner.swift */,
+				387B09454613692EADFE5A5B /* LaTeXCockpitIOSApp.swift */,
+				ABFE95332EE38534A8A80364 /* SwiftLaTeXRuntime */,
+			);
+			path = Sources;
+			sourceTree = "<group>";
+		};
+		52EC2E3C84C72F7E364487B6 /* Packages */ = {
+			isa = PBXGroup;
+			children = (
+				99F81FBCDAD9AE87FBBC1C77 /* raagtex */,
+			);
+			name = Packages;
+			sourceTree = "<group>";
+		};
+		603BF6619D501272855CF842 = {
+			isa = PBXGroup;
+			children = (
+				E1DF3FA7272AE1412A4228D6 /* iOSApp */,
+				52EC2E3C84C72F7E364487B6 /* Packages */,
+				82701FE1793F1406BF5E8223 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		82701FE1793F1406BF5E8223 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				17FADC0347E460FC94DF8377 /* raagtex-ios.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		ABFE95332EE38534A8A80364 /* SwiftLaTeXRuntime */ = {
+			isa = PBXGroup;
+			children = (
+				247CADBCBAAFC944102DE346 /* DvipdfmxEngine.js */,
+				244641DFF787577A0C15839B /* PdfTeXEngine.js */,
+				0E0244B995EB9C76C74F1B4D /* README.txt */,
+				2B9F64109A1DA2F08D1934E0 /* swiftlatexdvipdfm.js */,
+				01EF04EE123E621A1A5FB288 /* swiftlatexdvipdfm.wasm */,
+				E0C4E3BA4AEA61524EC639DA /* swiftlatexpdftex.js */,
+				8C572BB40955CF1F7BD44CA0 /* swiftlatexpdftex.wasm */,
+				CCD3E7FDB38BCF4B81EA1860 /* swiftlatexxetex.js */,
+				4CF638624F0CB13166012B78 /* swiftlatexxetex.wasm */,
+				342DA5C74075CE870F95AB39 /* XeTeXEngine.js */,
+			);
+			path = SwiftLaTeXRuntime;
+			sourceTree = "<group>";
+		};
+		E1DF3FA7272AE1412A4228D6 /* iOSApp */ = {
+			isa = PBXGroup;
+			children = (
+				4FB857DFD625F6F04F16213A /* Sources */,
+			);
+			name = iOSApp;
+			path = ..;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		3B6B8D0EBE37BEC19827FE9B /* raagtex-ios */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = B04B0156F11565236CAA2D91 /* Build configuration list for PBXNativeTarget "raagtex-ios" */;
+			buildPhases = (
+				BC94F48C137EC1B53476A16A /* Sources */,
+				A165FBDB7ACF4285BFA4CE61 /* Resources */,
+				747DE5A6CAECCC97EF88BE44 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = "raagtex-ios";
+			packageProductDependencies = (
+				FEA970A18EC286A45B5BDC54 /* Core */,
+				046A000C5305A0346314E9AD /* Shared */,
+			);
+			productName = "raagtex-ios";
+			productReference = 17FADC0347E460FC94DF8377 /* raagtex-ios.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		B7A2196A2210C4705DC2174F /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1430;
+				TargetAttributes = {
+					3B6B8D0EBE37BEC19827FE9B = {
+						DevelopmentTeam = "";
+						ProvisioningStyle = Automatic;
+					};
+				};
+			};
+			buildConfigurationList = B920DFB2200A43A7D3C48015 /* Build configuration list for PBXProject "raagtex-ios" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = 603BF6619D501272855CF842;
+			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				61686DF3BF153C7AA1BAA479 /* XCLocalSwiftPackageReference "../../.." */,
+			);
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 82701FE1793F1406BF5E8223 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				3B6B8D0EBE37BEC19827FE9B /* raagtex-ios */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		A165FBDB7ACF4285BFA4CE61 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				FE16AFC3DE7E70F0531081B0 /* DvipdfmxEngine.js in Resources */,
+				7957C16F532B96F7C58EBF69 /* PdfTeXEngine.js in Resources */,
+				F09F520C9B17FD93F56164C2 /* README.txt in Resources */,
+				C95397E7FA7DE8FBE4F90523 /* XeTeXEngine.js in Resources */,
+				CB6ACD5A6B5B7A6545493B24 /* swiftlatexdvipdfm.js in Resources */,
+				DA25E7CFE725985FB221BE5B /* swiftlatexdvipdfm.wasm in Resources */,
+				5D84C9F45C5C45F34B648BCF /* swiftlatexpdftex.js in Resources */,
+				2FBB2F6D20B4B740366D42A5 /* swiftlatexpdftex.wasm in Resources */,
+				F3663B10D7B74C8F9B7756FE /* swiftlatexxetex.js in Resources */,
+				CC294CB4B2E7D338982684FB /* swiftlatexxetex.wasm in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		BC94F48C137EC1B53476A16A /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				1759E5624AF437A3AD35E435 /* IOSRootView.swift in Sources */,
+				EDDC42079EAE2EF44C6AC563 /* IOSRootViewModel.swift in Sources */,
+				840B8CE276B2D2B137286D00 /* IOSSwiftLaTeXCompileRunner.swift in Sources */,
+				A29871E806B6ECF0051C26EE /* LaTeXCockpitIOSApp.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		1303BFF355FEF0B92404F81E /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.1;
+			};
+			name = Release;
+		};
+		44F0E97DE8EAE230C606366D /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = raagtex;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.raaghavt.raagtex.ios;
+				PRODUCT_NAME = "raagtex-ios";
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		FA46756A93E6132B56A4B355 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.1;
+			};
+			name = Debug;
+		};
+		FD86D5A282D2DB08FB86F1A9 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = raagtex;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.raaghavt.raagtex.ios;
+				PRODUCT_NAME = "raagtex-ios";
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		B04B0156F11565236CAA2D91 /* Build configuration list for PBXNativeTarget "raagtex-ios" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				44F0E97DE8EAE230C606366D /* Debug */,
+				FD86D5A282D2DB08FB86F1A9 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		B920DFB2200A43A7D3C48015 /* Build configuration list for PBXProject "raagtex-ios" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				FA46756A93E6132B56A4B355 /* Debug */,
+				1303BFF355FEF0B92404F81E /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		61686DF3BF153C7AA1BAA479 /* XCLocalSwiftPackageReference "../../.." */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ../../..;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		046A000C5305A0346314E9AD /* Shared */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = Shared;
+		};
+		FEA970A18EC286A45B5BDC54 /* Core */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = Core;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = B7A2196A2210C4705DC2174F /* Project object */;
+}

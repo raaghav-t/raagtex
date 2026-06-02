@@ -46,6 +46,18 @@ final class MacRootViewModel: ObservableObject {
         }
     }
 
+    @Published var speedCompileEnabled: Bool = false {
+        didSet {
+            guard oldValue != speedCompileEnabled else { return }
+            forceNextCompileRebuild = true
+            lastAutoCompileInputFingerprint = ""
+            persistSettings()
+            if isApplyingLoadedSettings == false, autoCompileEnabled {
+                scheduleAutoCompile()
+            }
+        }
+    }
+
     @Published var interfaceTheme: InterfaceTheme = .dark {
         didSet {
             guard oldValue != interfaceTheme else { return }
@@ -185,6 +197,12 @@ final class MacRootViewModel: ObservableObject {
             persistSettings()
         }
     }
+    @Published var confirmCloseWithUnsavedChanges: Bool = true {
+        didSet {
+            guard oldValue != confirmCloseWithUnsavedChanges else { return }
+            persistSettings()
+        }
+    }
     @Published var editorFontSize: Double = 15.0 {
         didSet {
             let clamped = min(max(editorFontSize, EditorTuning.minFontSize), EditorTuning.maxFontSize)
@@ -295,6 +313,8 @@ final class MacRootViewModel: ObservableObject {
     private var queuedCompileTrigger: CompileTrigger?
     private var autoCompileSuppressedUntil = Date.distantPast
     private var lastAutoCompileInputFingerprint = ""
+    private var activeCompileInputFingerprint = ""
+    private var forceNextCompileRebuild = false
     private var bannerDismissWorkItem: DispatchWorkItem?
     private var pendingProjectRefreshAfterCompile = false
     private var isApplyingLoadedSettings = false
@@ -388,6 +408,10 @@ final class MacRootViewModel: ObservableObject {
         return "\(gitBranchName) • clean"
     }
 
+    var selectedEditorDiagnostics: [CompileDiagnostic] {
+        diagnostics(forRelativePath: selectedEditorTex)
+    }
+
     func openProject(url: URL) {
         projectRoot = url
         applyProjectScan(ProjectScanner.scan(projectRoot: url))
@@ -426,6 +450,49 @@ final class MacRootViewModel: ObservableObject {
     }
 
     func closeProject() {
+        guard confirmDiscardUnsavedChangesIfNeeded() else { return }
+        closeProjectDiscardingChanges()
+    }
+
+    func confirmCloseWindowIfNeeded() -> Bool {
+        confirmDiscardUnsavedChangesIfNeeded()
+    }
+
+    private func confirmDiscardUnsavedChangesIfNeeded() -> Bool {
+        guard hasUnsavedEditorChanges, confirmCloseWithUnsavedChanges else { return true }
+
+        let alert = NSAlert()
+        alert.alertStyle = .warning
+        alert.messageText = "Save changes before closing?"
+        let fileName = selectedEditorTex.isEmpty ? "the current file" : selectedEditorTex
+        alert.informativeText = "You have unsaved changes in \(fileName). Closing now will discard them."
+        alert.addButton(withTitle: "Save")
+        alert.addButton(withTitle: "Discard")
+        alert.addButton(withTitle: "Cancel")
+        alert.showsSuppressionButton = true
+        alert.suppressionButton?.title = "Don't ask again"
+
+        let response = alert.runModal()
+        let shouldDisablePrompt = alert.suppressionButton?.state == .on
+
+        switch response {
+        case .alertFirstButtonReturn:
+            let didSave = saveEditorToDisk()
+            if didSave, shouldDisablePrompt {
+                confirmCloseWithUnsavedChanges = false
+            }
+            return didSave
+        case .alertSecondButtonReturn:
+            if shouldDisablePrompt {
+                confirmCloseWithUnsavedChanges = false
+            }
+            return true
+        default:
+            return false
+        }
+    }
+
+    private func closeProjectDiscardingChanges() {
         watcher?.stop()
         watcher = nil
         debounceWorkItem?.cancel()
@@ -452,6 +519,7 @@ final class MacRootViewModel: ObservableObject {
         hasUnsavedEditorChanges = false
         compilePreflightError = nil
         lastAutoCompileInputFingerprint = ""
+        activeCompileInputFingerprint = ""
         showsSyntaxColorEditor = false
         showsShortcutCommandEditor = false
         showsTemplateManager = false
@@ -603,6 +671,7 @@ final class MacRootViewModel: ObservableObject {
             case .manual:
                 queuedCompileTrigger = .manual
             case .automatic:
+                guard currentTexInputFingerprint() != activeCompileInputFingerprint else { return }
                 if queuedCompileTrigger == nil {
                     queuedCompileTrigger = .automatic
                 }
@@ -613,6 +682,8 @@ final class MacRootViewModel: ObservableObject {
             bannerMessage = "Choose a LaTeX project first."
             return
         }
+        refreshProjectFilesAndSelections()
+        configureWatcher()
         guard selectedMainTex.isEmpty == false else {
             bannerMessage = "Select a main .tex file before compiling."
             return
@@ -637,7 +708,8 @@ final class MacRootViewModel: ObservableObject {
         }
 
         suppressAutoCompile(for: 1.5)
-        lastAutoCompileInputFingerprint = currentTexInputFingerprint()
+        activeCompileInputFingerprint = currentTexInputFingerprint()
+        lastAutoCompileInputFingerprint = activeCompileInputFingerprint
 
         isCompiling = true
         debugLastCompileStartedAt = Date()
@@ -649,13 +721,18 @@ final class MacRootViewModel: ObservableObject {
             projectRoot: projectRoot,
             mainFileRelativePath: selectedMainTex,
             engine: selectedEngine,
-            autoCompile: trigger == .automatic
+            autoCompile: trigger == .automatic,
+            speedCompileEnabled: speedCompileEnabled,
+            forceRebuild: speedCompileEnabled || forceNextCompileRebuild
         )
+        forceNextCompileRebuild = false
 
         Task {
             defer {
                 Task { @MainActor in
+                    let completedInputFingerprint = self.activeCompileInputFingerprint
                     self.isCompiling = false
+                    self.activeCompileInputFingerprint = ""
                     self.suppressAutoCompile(for: 0.9)
                     if self.pendingProjectRefreshAfterCompile {
                         self.pendingProjectRefreshAfterCompile = false
@@ -663,6 +740,9 @@ final class MacRootViewModel: ObservableObject {
                     }
                     if let queuedTrigger = self.queuedCompileTrigger {
                         self.queuedCompileTrigger = nil
+                        if queuedTrigger == .automatic, self.currentTexInputFingerprint() == completedInputFingerprint {
+                            return
+                        }
                         self.compileNow(trigger: queuedTrigger)
                     }
                 }
@@ -709,13 +789,7 @@ final class MacRootViewModel: ObservableObject {
     }
 
     func userSelectedEditorFile(_ value: String) {
-        selectedEditorTex = value
-        if texFiles.contains(value), selectedMainTex != value {
-            selectedMainTex = value
-            documentState.mainFileRelativePath = value
-            updatePreviewFromExistingPDFIfAvailable()
-            refreshCompilePreflightError()
-        }
+        selectEditorFile(value, updateMainIfTex: true)
     }
 
     func openFileNode(_ node: ProjectFileNode) {
@@ -767,6 +841,12 @@ final class MacRootViewModel: ObservableObject {
         guard let fileURL = selectedEditorFileURL else { return }
         writeStringsToPasteboard([fileURL.path])
         bannerMessage = "Copied path for \(fileURL.lastPathComponent)"
+    }
+
+    func copyProjectRootPath() {
+        guard let projectRoot else { return }
+        writeStringsToPasteboard([projectRoot.path])
+        bannerMessage = "Copied path for \(projectRoot.lastPathComponent)"
     }
 
     func copyFileNode(_ node: ProjectFileNode) {
@@ -907,17 +987,22 @@ final class MacRootViewModel: ObservableObject {
         showsNewFileSheet = true
     }
 
-    func saveEditorToDisk() {
-        guard let target = selectedEditorFileURL else { return }
+    @discardableResult
+    func saveEditorToDisk() -> Bool {
+        guard let target = selectedEditorFileURL else { return false }
 
         do {
             try editorText.write(to: target, atomically: false, encoding: .utf8)
             hasUnsavedEditorChanges = false
             debugLastSaveAt = Date()
             suppressAutoCompile(for: 0.8)
+            refreshProjectFilesAndSelections()
+            configureWatcher()
             bannerMessage = "Saved \(selectedEditorTex)"
+            return true
         } catch {
             bannerMessage = "Save failed: \(error.localizedDescription)"
+            return false
         }
     }
 
@@ -1285,6 +1370,7 @@ final class MacRootViewModel: ObservableObject {
             mainTexRelativePath: selectedMainTex.isEmpty ? nil : selectedMainTex,
             latexEngine: selectedEngine,
             autoCompileEnabled: autoCompileEnabled,
+            speedCompileEnabled: speedCompileEnabled,
             interfaceTheme: interfaceTheme,
             interfaceMode: interfaceMode,
             interfaceTransparency: interfaceTransparency,
@@ -1292,6 +1378,7 @@ final class MacRootViewModel: ObservableObject {
             editorAutoCorrectEnabled: editorAutoCorrectEnabled,
             editorSyntaxColoringEnabled: editorSyntaxColoringEnabled,
             editorLineNumbersEnabled: editorLineNumbersEnabled,
+            confirmCloseWithUnsavedChanges: confirmCloseWithUnsavedChanges,
             editorFontSize: editorFontSize,
             customPalette: CustomThemePalette(accentRed: accentRed, accentGreen: accentGreen, accentBlue: accentBlue),
             gitHelpersEnabled: gitHelpersEnabled,
@@ -1320,6 +1407,7 @@ final class MacRootViewModel: ObservableObject {
 
         selectedEngine = settings.latexEngine
         autoCompileEnabled = settings.autoCompileEnabled
+        speedCompileEnabled = settings.speedCompileEnabled
         interfaceTheme = settings.interfaceTheme
         interfaceMode = settings.interfaceMode
         interfaceTransparency = settings.interfaceTransparency
@@ -1327,6 +1415,7 @@ final class MacRootViewModel: ObservableObject {
         editorAutoCorrectEnabled = settings.editorAutoCorrectEnabled
         editorSyntaxColoringEnabled = settings.editorSyntaxColoringEnabled
         editorLineNumbersEnabled = settings.editorLineNumbersEnabled
+        confirmCloseWithUnsavedChanges = settings.confirmCloseWithUnsavedChanges
         editorFontSize = settings.editorFontSize
         editorShortcutCommands = settings.editorShortcutCommands.isEmpty ? EditorShortcutCommand.defaultCommands : settings.editorShortcutCommands
         gitHelpersEnabled = settings.gitHelpersEnabled
@@ -1361,17 +1450,19 @@ final class MacRootViewModel: ObservableObject {
     private func configureWatcher() {
         watcher?.stop()
         watcher = nil
-        debounceWorkItem?.cancel()
-        debounceWorkItem = nil
-        projectRefreshWorkItem?.cancel()
-        projectRefreshWorkItem = nil
+        if autoCompileEnabled == false {
+            debounceWorkItem?.cancel()
+            debounceWorkItem = nil
+        }
 
-        guard autoCompileEnabled, let projectRoot else { return }
+        guard let projectRoot else { return }
 
         watcher = DirectoryWatcher(url: projectRoot) { [weak self] in
             Task { @MainActor in
                 self?.scheduleProjectRefresh()
-                self?.scheduleAutoCompile()
+                if self?.autoCompileEnabled == true {
+                    self?.scheduleAutoCompile()
+                }
             }
         }
         watcher?.start()
@@ -1382,12 +1473,13 @@ final class MacRootViewModel: ObservableObject {
 
         let work = DispatchWorkItem { [weak self] in
             Task { @MainActor in
-                guard let self, self.autoCompileEnabled, self.projectRoot != nil else { return }
+                guard let self, self.projectRoot != nil else { return }
                 guard self.isCompiling == false else {
                     self.pendingProjectRefreshAfterCompile = true
                     return
                 }
                 self.refreshProjectFilesAndSelections()
+                self.configureWatcher()
             }
         }
 
@@ -1426,10 +1518,42 @@ final class MacRootViewModel: ObservableObject {
         }
     }
 
+    private func diagnostics(forRelativePath relativePath: String) -> [CompileDiagnostic] {
+        guard relativePath.isEmpty == false else { return [] }
+
+        return documentState.diagnostics.filter { diagnostic in
+            guard let line = diagnostic.line, line > 0 else { return false }
+
+            guard let sourceFile = diagnostic.sourceFile, sourceFile.isEmpty == false else {
+                return relativePath == selectedMainTex
+            }
+
+            return normalizedDiagnosticPath(sourceFile) == normalizedDiagnosticPath(relativePath)
+        }
+    }
+
+    private func normalizedDiagnosticPath(_ path: String) -> String {
+        let standardized = path.hasPrefix("/") ? URL(fileURLWithPath: path).standardizedFileURL.path : path
+        let projectRootPath = projectRoot?.standardizedFileURL.path ?? ""
+        let relative: String
+        if projectRootPath.isEmpty == false, standardized == projectRootPath {
+            relative = ""
+        } else if projectRootPath.isEmpty == false, standardized.hasPrefix(projectRootPath + "/") {
+            relative = String(standardized.dropFirst(projectRootPath.count + 1))
+        } else {
+            relative = path
+        }
+
+        return relative
+            .replacingOccurrences(of: "\\", with: "/")
+            .trimmingCharacters(in: CharacterSet(charactersIn: "./"))
+    }
+
     private func currentTexInputFingerprint() -> String {
         guard let projectRoot else { return "" }
         var parts: [String] = []
         parts.reserveCapacity(max(8, texFiles.count))
+        parts.append("speedCompile=\(speedCompileEnabled)")
 
         for relativePath in texFiles {
             let fileURL = projectRoot.appending(path: relativePath)
@@ -1648,7 +1772,7 @@ final class MacRootViewModel: ObservableObject {
             refreshProjectFilesAndSelections()
             let createdRelativePath = relativePath(for: destinationURL)
             if createdRelativePath.lowercased().hasSuffix(".tex") {
-                selectedEditorTex = createdRelativePath
+                selectEditorFile(createdRelativePath, updateMainIfTex: true)
             }
             bannerMessage = "Created file \(name)"
             return true
@@ -1667,13 +1791,23 @@ final class MacRootViewModel: ObservableObject {
         }
 
         if selectedEditorTex.isEmpty == false, fileExists(forRelativePath: selectedEditorTex) == false {
-            selectedEditorTex = selectedMainTex
+            selectEditorFile(selectedMainTex, updateMainIfTex: false)
         }
         if selectedEditorTex.isEmpty, selectedMainTex.isEmpty == false {
-            selectedEditorTex = selectedMainTex
+            selectEditorFile(selectedMainTex, updateMainIfTex: false)
         }
 
         documentState.mainFileRelativePath = selectedMainTex
+        updatePreviewFromExistingPDFIfAvailable()
+        refreshCompilePreflightError()
+    }
+
+    private func selectEditorFile(_ relativePath: String, updateMainIfTex: Bool) {
+        selectedEditorTex = relativePath
+
+        guard updateMainIfTex, texFiles.contains(relativePath), selectedMainTex != relativePath else { return }
+        selectedMainTex = relativePath
+        documentState.mainFileRelativePath = relativePath
         updatePreviewFromExistingPDFIfAvailable()
         refreshCompilePreflightError()
     }
@@ -2354,7 +2488,7 @@ final class MacRootViewModel: ObservableObject {
     }
 }
 
-enum CompileTrigger {
+enum CompileTrigger: Equatable {
     case manual
     case automatic
 }

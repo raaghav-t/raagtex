@@ -5,7 +5,7 @@ A beautiful native LaTeX cockpit for fast local writing, compiling, and live doc
 ## Status
 Functional Apple-platform baseline:
 - macOS app with full local compile pipeline, editor, PDF preview, theming controls, and persistence.
-- iPad app with native local project browsing, `.tex` editing, settings/recent-project persistence, diagnostics surface, and PDF preview (with on-device compile backend still pluggable/future-facing).
+- iPad app with native local project browsing, `.tex` editing, settings/recent-project persistence, diagnostics surface, PDF preview, and on-device compile via bundled SwiftLaTeX WebAssembly runtime.
 
 ## Implemented Baseline
 - macOS SwiftUI shell with split-view navigation
@@ -20,10 +20,13 @@ Functional Apple-platform baseline:
 - Optional in-editor LaTeX syntax coloring tool (grayscale token differentiation)
 - Configurable editor shortcut commands (math-first defaults) via Experience sidebar -> Writing -> Commands
 - Choose compile engine (`pdflatex`, `xelatex`, `lualatex`) and compile via `latexmk`
+- Optional Speed Compile mode asks `graphicx` to render included figures as placeholders for faster draft builds
 - macOS compile runner now resolves TeX tool paths more robustly (including `/Library/TeX/texbin`) for GUI-launched builds
-- iPad compile action gracefully falls back to showing an existing generated PDF when on-device compile is unavailable
+- iPad compile action runs an embedded SwiftLaTeX runtime (`pdfTeX` / `xeTeX + dvipdfmx`) and writes generated PDFs back into the project folder
+- iPad compile action falls back to showing the latest generated PDF artifact if a compile attempt fails
 - Preflight main-file validation blocks compile when required document structure is missing (`\documentclass` first non-comment line, plus `\begin{document}`)
 - Structured diagnostics + raw compile log capture
+- macOS editor marks line-specific compile errors inline with a red gutter/line highlight and hover message
 - PDF preview surface (PDFKit-backed)
 - Switchable editor/PDF layout with directional variants:
   - left-right
@@ -63,7 +66,7 @@ Functional Apple-platform baseline:
 - `Apps/MacApp`: macOS UI shell, project workflow, editor/preview, compile controls
 - `Apps/iOSApp`: iPad workspace shell, project workflow, editor, diagnostics, and PDF preview
 - `Core`: compile domain, latexmk runner, diagnostics parser, document state
-- `Core`: includes iOS compile-backend adapter contracts (`IOSOnDeviceCompileRunning`) for future on-device TeX integration
+- `Core`: includes iOS compile-backend adapter contracts (`IOSOnDeviceCompileRunning`) used by the iPad on-device TeX runtime integration
 - `Shared`: reusable models + persistence stores (recent projects/settings)
 - `Examples`: small compileable sample LaTeX project
 

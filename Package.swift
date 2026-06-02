@@ -32,7 +32,10 @@ let package = Package(
         .executableTarget(
             name: "iOSApp",
             dependencies: ["Core", "Shared"],
-            path: "Apps/iOSApp/Sources"
+            path: "Apps/iOSApp/Sources",
+            resources: [
+                .copy("SwiftLaTeXRuntime")
+            ]
         ),
         .testTarget(
             name: "CoreTests",

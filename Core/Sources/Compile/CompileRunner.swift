@@ -30,17 +30,23 @@ public struct CompileRequest: Equatable, Sendable {
     public var mainFileRelativePath: String
     public var engine: CompileEngine
     public var autoCompile: Bool
+    public var speedCompileEnabled: Bool
+    public var forceRebuild: Bool
 
     public init(
         projectRoot: URL,
         mainFileRelativePath: String,
         engine: CompileEngine = .pdfLaTeX,
-        autoCompile: Bool = false
+        autoCompile: Bool = false,
+        speedCompileEnabled: Bool = false,
+        forceRebuild: Bool = false
     ) {
         self.projectRoot = projectRoot
         self.mainFileRelativePath = mainFileRelativePath
         self.engine = engine
         self.autoCompile = autoCompile
+        self.speedCompileEnabled = speedCompileEnabled
+        self.forceRebuild = forceRebuild
     }
 
     public var mainFileURL: URL {
@@ -161,8 +167,11 @@ public struct LatexmkCompileRunner: CompileRunning {
             "-synctex=1",
             request.mainFileRelativePath
         ]
-        if forceRebuildForSyncTeX {
+        if request.forceRebuild || forceRebuildForSyncTeX {
             arguments.insert("-g", at: 1)
+        }
+        if request.speedCompileEnabled {
+            arguments.insert("-usepretex=\(Self.speedCompilePretex)", at: arguments.count - 1)
         }
         process.arguments = arguments
 
@@ -246,6 +255,12 @@ public struct LatexmkCompileRunner: CompileRunning {
         environment["PATH"] = path
         return environment
     }
+
+    private static let speedCompilePretex =
+        "\\PassOptionsToPackage{draft}{graphicx}" +
+        "\\makeatletter" +
+        "\\AtBeginDocument{\\@ifpackageloaded{graphicx}{\\setkeys{Gin}{draft=true}}{}}" +
+        "\\makeatother"
 
     private func needsSyncTeXRebuild(for request: CompileRequest) -> Bool {
         let base = request.mainFileURL.deletingPathExtension()

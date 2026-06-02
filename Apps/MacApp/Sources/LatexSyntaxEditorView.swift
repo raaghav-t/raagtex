@@ -1,4 +1,5 @@
 import AppKit
+import Core
 import Shared
 import SwiftUI
 
@@ -11,6 +12,7 @@ struct LatexSyntaxEditorView: NSViewRepresentable {
     var showLineNumbers: Bool
     var editorFontSize: CGFloat
     var shortcutCommands: [EditorShortcutCommand]
+    var diagnostics: [CompileDiagnostic]
     var lineJumpRequest: EditorLineJumpRequest?
     var onLineJumpHandled: ((UUID) -> Void)? = nil
     var onSaveRequested: (() -> Void)?
@@ -64,6 +66,7 @@ struct LatexSyntaxEditorView: NSViewRepresentable {
             showLineNumbers: showLineNumbers,
             editorFontSize: editorFontSize,
             shortcutCommands: shortcutCommands,
+            diagnostics: diagnostics,
             lineJumpRequest: lineJumpRequest,
             onLineJumpHandled: onLineJumpHandled,
             onSaveRequested: onSaveRequested,
@@ -83,6 +86,7 @@ struct LatexSyntaxEditorView: NSViewRepresentable {
             showLineNumbers: showLineNumbers,
             editorFontSize: editorFontSize,
             shortcutCommands: shortcutCommands,
+            diagnostics: diagnostics,
             lineJumpRequest: lineJumpRequest,
             onLineJumpHandled: onLineJumpHandled,
             onSaveRequested: onSaveRequested,
@@ -98,7 +102,7 @@ struct LatexSyntaxEditorView: NSViewRepresentable {
         var text: Binding<String>
         weak var textView: NSTextView?
         weak var scrollView: NSScrollView?
-        weak var lineNumberRulerView: LineNumberRulerView?
+        fileprivate weak var lineNumberRulerView: LineNumberRulerView?
 
         private var isProgrammaticChange = false
         private var cachedSyntaxColoringEnabled = true
@@ -106,6 +110,7 @@ struct LatexSyntaxEditorView: NSViewRepresentable {
         private var cachedTheme: InterfaceTheme = .dark
         private var cachedSyntaxColors = EditorSyntaxColors.defaults(for: .dark)
         private var cachedEditorFontSize: CGFloat = 15
+        private var cachedLineDiagnostics: [EditorLineDiagnostic] = []
         private var cachedIgnoredWords: Set<String> = []
         private var lastHandledLineJumpRequestID: UUID?
         private var highlightWorkItem: DispatchWorkItem?
@@ -138,6 +143,7 @@ struct LatexSyntaxEditorView: NSViewRepresentable {
             showLineNumbers: Bool,
             editorFontSize: CGFloat,
             shortcutCommands: [EditorShortcutCommand],
+            diagnostics: [CompileDiagnostic],
             lineJumpRequest: EditorLineJumpRequest?,
             onLineJumpHandled: ((UUID) -> Void)?,
             onSaveRequested: (() -> Void)?,
@@ -145,6 +151,7 @@ struct LatexSyntaxEditorView: NSViewRepresentable {
         ) {
             guard let textView, let scrollView else { return }
             let effectiveFontSize = LatexSyntaxEditorView.clampedFontSize(editorFontSize)
+            let lineDiagnostics = EditorLineDiagnostic.collapsed(from: diagnostics)
 
             textView.isEditable = true
             textView.isSelectable = true
@@ -152,26 +159,30 @@ struct LatexSyntaxEditorView: NSViewRepresentable {
             textView.isContinuousSpellCheckingEnabled = autocorrectionEnabled
             (textView as? LatexTextView)?.shortcutCommands = shortcutCommands
             (textView as? LatexTextView)?.onSaveRequested = onSaveRequested
+            (textView as? LatexTextView)?.diagnostics = lineDiagnostics
             scrollView.rulersVisible = showLineNumbers
             scrollView.hasVerticalRuler = showLineNumbers
             lineNumberRulerView?.isHidden = showLineNumbers == false
+            lineNumberRulerView?.diagnostics = lineDiagnostics
 
             let needsTextSync = forceTextUpdate || textView.string != newText
             let needsStyleRefresh =
                 cachedSyntaxColoringEnabled != syntaxColoringEnabled ||
                 cachedTheme != interfaceTheme ||
                 cachedSyntaxColors != syntaxColors ||
-                cachedEditorFontSize != effectiveFontSize
+                cachedEditorFontSize != effectiveFontSize ||
+                cachedLineDiagnostics != lineDiagnostics
 
             cachedSyntaxColoringEnabled = syntaxColoringEnabled
             cachedAutoCorrectionEnabled = autocorrectionEnabled
             cachedTheme = interfaceTheme
             cachedSyntaxColors = syntaxColors
             cachedEditorFontSize = effectiveFontSize
+            cachedLineDiagnostics = lineDiagnostics
 
             if needsTextSync {
                 isProgrammaticChange = true
-                let selectedRange = textView.selectedRange()
+                let selectedRange = clampedSelectedRange(in: textView)
                 textView.string = newText
                 applyHighlighting(
                     to: textView,
@@ -180,10 +191,7 @@ struct LatexSyntaxEditorView: NSViewRepresentable {
                     syntaxColors: syntaxColors,
                     fontSize: effectiveFontSize
                 )
-                let maxLength = (newText as NSString).length
-                let clampedLocation = min(selectedRange.location, maxLength)
-                let clampedLength = min(selectedRange.length, max(0, maxLength - clampedLocation))
-                textView.setSelectedRange(NSRange(location: clampedLocation, length: clampedLength))
+                setSelectedRangeIfNeeded(selectedRange, in: textView)
                 isProgrammaticChange = false
                 lineNumberRulerView?.invalidateLineNumbers()
             } else if needsStyleRefresh {
@@ -270,11 +278,13 @@ struct LatexSyntaxEditorView: NSViewRepresentable {
             fontSize: CGFloat
         ) {
             let source = textView.string
-            let attributed = NSMutableAttributedString(string: source)
+            guard let textStorage = textView.textStorage else { return }
             let fullRange = NSRange(location: 0, length: (source as NSString).length)
 
             let palette = SyntaxPalette(theme: theme, colors: syntaxColors)
-            attributed.addAttributes(
+            let selectedRange = clampedSelectedRange(in: textView)
+            textStorage.beginEditing()
+            textStorage.setAttributes(
                 [
                     .foregroundColor: palette.base,
                     .font: NSFont.monospacedSystemFont(ofSize: fontSize, weight: .regular)
@@ -283,42 +293,57 @@ struct LatexSyntaxEditorView: NSViewRepresentable {
             )
 
             if syntaxColoringEnabled {
-                applyRegex(Self.commandRegex, color: palette.command, on: attributed, source: source)
-                applyRegex(Self.environmentRegex, color: palette.environment, on: attributed, source: source)
-                applyRegex(Self.commentRegex, color: palette.comment, on: attributed, source: source)
+                applyRegex(Self.commandRegex, color: palette.command, on: textStorage, source: source)
+                applyRegex(Self.environmentRegex, color: palette.environment, on: textStorage, source: source)
+                applyRegex(Self.commentRegex, color: palette.comment, on: textStorage, source: source)
 
                 if (source as NSString).length <= Self.fullMathHighlightThreshold {
-                    applyRegex(Self.inlineMathRegex, color: palette.math, on: attributed, source: source)
-                    applyRegex(Self.displayMathBracketRegex, color: palette.math, on: attributed, source: source)
-                    applyRegex(Self.displayMathParenRegex, color: palette.math, on: attributed, source: source)
+                    applyRegex(Self.inlineMathRegex, color: palette.math, on: textStorage, source: source)
+                    applyRegex(Self.displayMathBracketRegex, color: palette.math, on: textStorage, source: source)
+                    applyRegex(Self.displayMathParenRegex, color: palette.math, on: textStorage, source: source)
                 }
             }
-
-            let selectedRange = textView.selectedRange()
-            textView.textStorage?.setAttributedString(attributed)
+            textStorage.endEditing()
             textView.typingAttributes = [
                 .foregroundColor: palette.base,
                 .font: NSFont.monospacedSystemFont(ofSize: fontSize, weight: .regular)
             ]
 
-            let maxLength = (textView.string as NSString).length
-            let clampedLocation = min(selectedRange.location, maxLength)
-            let clampedLength = min(selectedRange.length, max(0, maxLength - clampedLocation))
-            textView.setSelectedRange(NSRange(location: clampedLocation, length: clampedLength))
+            setSelectedRangeIfNeeded(selectedRange, in: textView)
             textView.insertionPointColor = palette.caret
         }
 
         private func applyRegex(
             _ regex: NSRegularExpression,
             color: NSColor,
-            on attributed: NSMutableAttributedString,
+            on textStorage: NSTextStorage,
             source: String
         ) {
             let range = NSRange(location: 0, length: (source as NSString).length)
             regex.enumerateMatches(in: source, options: [], range: range) { match, _, _ in
                 guard let matchRange = match?.range, matchRange.location != NSNotFound else { return }
-                attributed.addAttribute(.foregroundColor, value: color, range: matchRange)
+                textStorage.addAttribute(.foregroundColor, value: color, range: matchRange)
             }
+        }
+
+        private func clampedSelectedRange(in textView: NSTextView) -> NSRange {
+            clampedRange(textView.selectedRange(), maxLength: (textView.string as NSString).length)
+        }
+
+        private func clampedRange(_ range: NSRange, maxLength: Int) -> NSRange {
+            guard range.location != NSNotFound else {
+                return NSRange(location: maxLength, length: 0)
+            }
+
+            let location = min(max(0, range.location), maxLength)
+            let length = min(max(0, range.length), max(0, maxLength - location))
+            return NSRange(location: location, length: length)
+        }
+
+        private func setSelectedRangeIfNeeded(_ range: NSRange, in textView: NSTextView) {
+            let clamped = clampedRange(range, maxLength: (textView.string as NSString).length)
+            guard NSEqualRanges(textView.selectedRange(), clamped) == false else { return }
+            textView.setSelectedRange(clamped)
         }
 
         private func updateIgnoredWords(in textView: NSTextView, source: String) {
@@ -411,9 +436,50 @@ struct LatexSyntaxEditorView: NSViewRepresentable {
     }
 }
 
-final class LineNumberRulerView: NSRulerView {
+fileprivate struct EditorLineDiagnostic: Equatable {
+    let line: Int
+    let severity: CompileDiagnostic.Severity
+    let message: String
+
+    static func collapsed(from diagnostics: [CompileDiagnostic]) -> [EditorLineDiagnostic] {
+        let lineGroups = Dictionary(grouping: diagnostics.compactMap { diagnostic -> EditorLineDiagnostic? in
+            guard let line = diagnostic.line, line > 0 else { return nil }
+            return EditorLineDiagnostic(
+                line: line,
+                severity: diagnostic.severity,
+                message: diagnostic.message.trimmingCharacters(in: .whitespacesAndNewlines)
+            )
+        }, by: \.line)
+
+        return lineGroups.map { line, diagnostics in
+            let severity = diagnostics.contains { $0.severity == .error } ? CompileDiagnostic.Severity.error :
+                (diagnostics.contains { $0.severity == .warning } ? .warning : .info)
+            let message = diagnostics
+                .map(\.message)
+                .filter { $0.isEmpty == false }
+                .joined(separator: "\n")
+            return EditorLineDiagnostic(line: line, severity: severity, message: message)
+        }
+        .sorted { $0.line < $1.line }
+    }
+}
+
+fileprivate enum EditorDiagnosticColors {
+    static let error = NSColor(calibratedRed: 1.0, green: 0.29, blue: 0.28, alpha: 1.0)
+    static let errorFill = NSColor(calibratedRed: 1.0, green: 0.29, blue: 0.28, alpha: 0.12)
+}
+
+fileprivate final class LineNumberRulerView: NSRulerView {
     weak var trackedTextView: NSTextView?
+    var diagnostics: [EditorLineDiagnostic] = [] {
+        didSet {
+            diagnosticLookup = Dictionary(uniqueKeysWithValues: diagnostics.map { ($0.line, $0) })
+            needsDisplay = true
+        }
+    }
     private let numberFont = NSFont.monospacedDigitSystemFont(ofSize: 11, weight: .regular)
+    private var diagnosticLookup: [Int: EditorLineDiagnostic] = [:]
+    private var trackingArea: NSTrackingArea?
 
     init(textView: NSTextView) {
         self.trackedTextView = textView
@@ -445,6 +511,27 @@ final class LineNumberRulerView: NSRulerView {
 
     deinit {
         NotificationCenter.default.removeObserver(self)
+    }
+
+    override func updateTrackingAreas() {
+        if let trackingArea {
+            removeTrackingArea(trackingArea)
+        }
+        let area = NSTrackingArea(
+            rect: bounds,
+            options: [.activeInKeyWindow, .mouseMoved, .inVisibleRect],
+            owner: self,
+            userInfo: nil
+        )
+        addTrackingArea(area)
+        trackingArea = area
+        super.updateTrackingAreas()
+    }
+
+    override func mouseMoved(with event: NSEvent) {
+        let point = convert(event.locationInWindow, from: nil)
+        toolTip = diagnosticMessage(at: point)
+        super.mouseMoved(with: event)
     }
 
     @objc
@@ -507,7 +594,8 @@ final class LineNumberRulerView: NSRulerView {
                 drawLineNumber(
                     "\(lineNumber)",
                     atY: y + max(0, (lineRect.height - numberFont.pointSize) / 2.0),
-                    in: bounds
+                    in: bounds,
+                    diagnostic: diagnosticLookup[lineNumber]
                 )
             }
 
@@ -516,21 +604,186 @@ final class LineNumberRulerView: NSRulerView {
         }
     }
 
-    private func drawLineNumber(_ value: String, atY y: CGFloat, in bounds: NSRect) {
+    private func drawLineNumber(_ value: String, atY y: CGFloat, in bounds: NSRect, diagnostic: EditorLineDiagnostic? = nil) {
         let label = value as NSString
+        if diagnostic?.severity == .error {
+            EditorDiagnosticColors.error.setFill()
+            NSBezierPath(roundedRect: NSRect(x: 4, y: y - 1, width: 3, height: numberFont.pointSize + 3), xRadius: 1.5, yRadius: 1.5).fill()
+        }
+
         let attributes: [NSAttributedString.Key: Any] = [
-            .font: numberFont,
-            .foregroundColor: NSColor.secondaryLabelColor
+            .font: diagnostic?.severity == .error ? NSFont.monospacedDigitSystemFont(ofSize: 11, weight: .semibold) : numberFont,
+            .foregroundColor: diagnostic?.severity == .error ? EditorDiagnosticColors.error : NSColor.secondaryLabelColor
         ]
         let labelSize = label.size(withAttributes: attributes)
         let x = bounds.width - labelSize.width - 8
         label.draw(at: NSPoint(x: x, y: y), withAttributes: attributes)
+    }
+
+    private func diagnosticMessage(at point: NSPoint) -> String? {
+        guard
+            let textView = trackedTextView,
+            let layoutManager = textView.layoutManager,
+            let textContainer = textView.textContainer
+        else {
+            return nil
+        }
+
+        let visibleRect = textView.enclosingScrollView?.contentView.bounds ?? .zero
+        let yInTextView = point.y + visibleRect.minY
+        let glyphRange = layoutManager.glyphRange(forBoundingRect: visibleRect, in: textContainer)
+        let charRange = layoutManager.characterRange(forGlyphRange: glyphRange, actualGlyphRange: nil)
+        let text = textView.string as NSString
+        guard text.length > 0 else { return nil }
+
+        let firstVisibleChar = min(charRange.location, max(0, text.length - 1))
+        let firstVisibleLine = text.lineRange(for: NSRange(location: firstVisibleChar, length: 0))
+        var lineNumber = 1
+        var searchLocation = 0
+        while searchLocation < firstVisibleLine.location && searchLocation < text.length {
+            let lineRange = text.lineRange(for: NSRange(location: searchLocation, length: 0))
+            searchLocation = NSMaxRange(lineRange)
+            lineNumber += 1
+        }
+
+        var lineStart = firstVisibleLine.location
+        while lineStart < text.length {
+            let lineRange = text.lineRange(for: NSRange(location: lineStart, length: 0))
+            let glyphIndex = layoutManager.glyphIndexForCharacter(at: lineRange.location)
+            var lineRect = layoutManager.lineFragmentRect(forGlyphAt: glyphIndex, effectiveRange: nil)
+            lineRect.origin.y += textView.textContainerOrigin.y
+            if lineRect.minY <= yInTextView, yInTextView <= lineRect.maxY {
+                return diagnosticLookup[lineNumber]?.message
+            }
+            if lineRect.minY > yInTextView {
+                return nil
+            }
+            lineNumber += 1
+            lineStart = NSMaxRange(lineRange)
+        }
+
+        return nil
     }
 }
 
 private final class LatexTextView: NSTextView {
     var shortcutCommands: [EditorShortcutCommand] = []
     var onSaveRequested: (() -> Void)?
+    var diagnostics: [EditorLineDiagnostic] = [] {
+        didSet {
+            diagnosticLookup = Dictionary(uniqueKeysWithValues: diagnostics.map { ($0.line, $0) })
+            needsDisplay = true
+        }
+    }
+    private var diagnosticLookup: [Int: EditorLineDiagnostic] = [:]
+    private var trackingArea: NSTrackingArea?
+
+    override func updateTrackingAreas() {
+        if let trackingArea {
+            removeTrackingArea(trackingArea)
+        }
+        let area = NSTrackingArea(
+            rect: bounds,
+            options: [.activeInKeyWindow, .mouseMoved, .inVisibleRect],
+            owner: self,
+            userInfo: nil
+        )
+        addTrackingArea(area)
+        trackingArea = area
+        super.updateTrackingAreas()
+    }
+
+    override func mouseMoved(with event: NSEvent) {
+        let point = convert(event.locationInWindow, from: nil)
+        toolTip = diagnosticMessage(at: point)
+        super.mouseMoved(with: event)
+    }
+
+    override func drawBackground(in rect: NSRect) {
+        super.drawBackground(in: rect)
+        drawDiagnosticHighlights(in: rect)
+    }
+
+    private func drawDiagnosticHighlights(in rect: NSRect) {
+        guard
+            diagnosticLookup.isEmpty == false,
+            let layoutManager
+        else {
+            return
+        }
+
+        for diagnostic in diagnostics where diagnostic.severity == .error {
+            guard let lineRange = rangeForLine(diagnostic.line) else { continue }
+            let glyphRange = layoutManager.glyphRange(forCharacterRange: lineRange, actualCharacterRange: nil)
+            guard glyphRange.location != NSNotFound else { continue }
+
+            var lineRect = layoutManager.lineFragmentRect(forGlyphAt: glyphRange.location, effectiveRange: nil)
+            lineRect.origin.x = 0
+            lineRect.origin.y += textContainerOrigin.y
+            lineRect.size.width = bounds.width
+            lineRect = lineRect.insetBy(dx: 0, dy: -1)
+            guard lineRect.intersects(rect) else { continue }
+
+            EditorDiagnosticColors.error.setFill()
+            NSRect(x: 0, y: lineRect.minY + 1, width: 3, height: max(2, lineRect.height - 2)).fill()
+        }
+    }
+
+    private func diagnosticMessage(at point: NSPoint) -> String? {
+        guard
+            let layoutManager,
+            let textContainer,
+            diagnosticLookup.isEmpty == false
+        else {
+            return nil
+        }
+
+        var containerPoint = point
+        containerPoint.x -= textContainerOrigin.x
+        containerPoint.y -= textContainerOrigin.y
+        let glyphIndex = layoutManager.glyphIndex(for: containerPoint, in: textContainer)
+        let characterIndex = layoutManager.characterIndexForGlyph(at: glyphIndex)
+        let line = lineNumber(forCharacterAt: characterIndex)
+        return diagnosticLookup[line]?.message
+    }
+
+    private func rangeForLine(_ targetLine: Int) -> NSRange? {
+        let targetLine = max(1, targetLine)
+        let nsText = string as NSString
+        guard nsText.length > 0 else { return targetLine == 1 ? NSRange(location: 0, length: 0) : nil }
+
+        var line = 1
+        var location = 0
+        while location < nsText.length {
+            let range = nsText.lineRange(for: NSRange(location: location, length: 0))
+            if line == targetLine {
+                return range
+            }
+            let nextLocation = NSMaxRange(range)
+            if nextLocation <= location {
+                break
+            }
+            location = nextLocation
+            line += 1
+        }
+
+        return nil
+    }
+
+    private func lineNumber(forCharacterAt characterIndex: Int) -> Int {
+        let nsText = string as NSString
+        let clampedIndex = min(max(0, characterIndex), nsText.length)
+        var line = 1
+        var location = 0
+        while location < clampedIndex, location < nsText.length {
+            let range = nsText.lineRange(for: NSRange(location: location, length: 0))
+            let nextLocation = NSMaxRange(range)
+            guard nextLocation <= clampedIndex, nextLocation > location else { break }
+            location = nextLocation
+            line += 1
+        }
+        return line
+    }
 
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
         guard event.type == .keyDown else {
@@ -594,10 +847,10 @@ private final class LatexTextView: NSTextView {
 
     private func applyShortcut(_ template: String) -> Bool {
         let marker = "$SELECTION$"
-        let selected = selectedRange()
         guard let storage = textStorage else { return false }
 
         let source = storage.string as NSString
+        let selected = clampedSelectedRange(for: source)
         let selectedText = selected.length > 0 ? source.substring(with: selected) : ""
         let markerRange = (template as NSString).range(of: marker)
 
@@ -620,14 +873,14 @@ private final class LatexTextView: NSTextView {
         storage.replaceCharacters(in: selected, with: replacement)
         didChangeText()
 
-        setSelectedRange(selectionAfterInsert)
+        setClampedSelectedRange(selectionAfterInsert)
         return true
     }
 
     private func toggleCommentOnSelectedLines() -> Bool {
         guard let storage = textStorage else { return false }
         let source = storage.string as NSString
-        let selection = selectedRange()
+        let selection = clampedSelectedRange(for: source)
         let length = source.length
         guard length > 0 else { return false }
 
@@ -659,7 +912,7 @@ private final class LatexTextView: NSTextView {
 
         let transformedLength = (transformed as NSString).length
         if selection.length > 0 {
-            setSelectedRange(NSRange(location: blockStart, length: transformedLength))
+            setClampedSelectedRange(NSRange(location: blockStart, length: transformedLength))
         } else {
             let offsetInLine = max(0, selectionStart - blockStart)
             let originalLine = lines.first ?? ""
@@ -669,7 +922,7 @@ private final class LatexTextView: NSTextView {
                 uncommenting: shouldUncomment
             )
             let newLocation = min(blockStart + transformedLength, max(blockStart, selectionStart + adjustment))
-            setSelectedRange(NSRange(location: newLocation, length: 0))
+            setClampedSelectedRange(NSRange(location: newLocation, length: 0))
         }
 
         return true
@@ -717,6 +970,26 @@ private final class LatexTextView: NSTextView {
         } else {
             return caretOffsetInLine > indentCount ? 2 : 0
         }
+    }
+
+    private func clampedSelectedRange(for source: NSString) -> NSRange {
+        clampedRange(selectedRange(), maxLength: source.length)
+    }
+
+    private func clampedRange(_ range: NSRange, maxLength: Int) -> NSRange {
+        guard range.location != NSNotFound else {
+            return NSRange(location: maxLength, length: 0)
+        }
+
+        let location = min(max(0, range.location), maxLength)
+        let length = min(max(0, range.length), max(0, maxLength - location))
+        return NSRange(location: location, length: length)
+    }
+
+    private func setClampedSelectedRange(_ range: NSRange) {
+        let clamped = clampedRange(range, maxLength: (string as NSString).length)
+        guard NSEqualRanges(selectedRange(), clamped) == false else { return }
+        setSelectedRange(clamped)
     }
 }
 
@@ -777,19 +1050,24 @@ private struct SyntaxPalette {
         switch theme {
         case .light, .clearLight:
             base = NSColor(white: 0.14, alpha: 1)
-            command = NSColor(colors.command)
-            environment = NSColor(colors.environment)
-            math = NSColor(colors.math)
-            comment = NSColor(colors.comment)
+            command = Self.resolvedColor(colors.command)
+            environment = Self.resolvedColor(colors.environment)
+            math = Self.resolvedColor(colors.math)
+            comment = Self.resolvedColor(colors.comment)
             caret = NSColor(white: 0.18, alpha: 1)
         case .dark, .clearDark, .clear:
             base = NSColor(white: 0.90, alpha: 1)
-            command = NSColor(colors.command)
-            environment = NSColor(colors.environment)
-            math = NSColor(colors.math)
-            comment = NSColor(colors.comment)
+            command = Self.resolvedColor(colors.command)
+            environment = Self.resolvedColor(colors.environment)
+            math = Self.resolvedColor(colors.math)
+            comment = Self.resolvedColor(colors.comment)
             caret = NSColor(white: 0.94, alpha: 1)
         }
+    }
+
+    private static func resolvedColor(_ color: Color) -> NSColor {
+        let candidate = NSColor(color)
+        return candidate.usingColorSpace(.extendedSRGB) ?? candidate.usingColorSpace(.sRGB) ?? candidate
     }
 }
 

@@ -123,14 +123,20 @@ struct MacRootView: View {
 
             if viewModel.projectRoot != nil {
                 Section {
-                    ForEach(viewModel.projectFileTree) { node in
-                        fileTreeBranch(node)
+                    if viewModel.projectFileTree.isEmpty {
+                        emptyProjectFolderRow
+                            .listRowInsets(EdgeInsets(top: 2, leading: 8, bottom: 2, trailing: 8))
+                            .listRowBackground(Color.clear)
+                    } else {
+                        ForEach(viewModel.projectFileTree) { node in
+                            fileTreeBranch(node)
+                        }
                     }
                 } header: {
                     HStack(spacing: 0) {
                         Text("Files")
                         Text("  ")
-                        Text(viewModel.projectRoot?.path ?? "")
+                        Text(sidebarProjectPath)
                             .font(.caption)
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
@@ -354,6 +360,15 @@ struct MacRootView: View {
                 Divider()
                     .overlay(Color.white.opacity(0.08))
 
+                ExperienceSettingRow(icon: "exclamationmark.triangle", label: "Confirm Close") {
+                    Toggle("", isOn: $viewModel.confirmCloseWithUnsavedChanges)
+                        .toggleStyle(.switch)
+                        .labelsHidden()
+                }
+
+                Divider()
+                    .overlay(Color.white.opacity(0.08))
+
                 HStack {
                     Button {
                         viewModel.presentShortcutCommandEditor()
@@ -484,6 +499,7 @@ struct MacRootView: View {
                 showLineNumbers: viewModel.editorLineNumbersEnabled,
                 editorFontSize: CGFloat(viewModel.editorFontSize),
                 shortcutCommands: viewModel.editorShortcutCommands,
+                diagnostics: viewModel.selectedEditorDiagnostics,
                 lineJumpRequest: viewModel.editorLineJumpRequest,
                 onLineJumpHandled: { id in
                     viewModel.clearEditorLineJumpRequest(id)
@@ -830,6 +846,10 @@ struct MacRootView: View {
                     .controlSize(.small)
                     .font(.caption)
                     .padding(.leading, 10)
+                    .padding(.trailing, 4)
+
+                SpeedCompileToolbarButton(isEnabled: $viewModel.speedCompileEnabled)
+                    .padding(.leading, 4)
                     .padding(.trailing, 10)
             }
 
@@ -859,6 +879,60 @@ struct MacRootView: View {
                 .disabled(viewModel.isCompiling || viewModel.compilePreflightError != nil)
                 .help(viewModel.compilePreflightError ?? "Compile current main file")
             }
+        }
+    }
+
+    private var emptyProjectFolderRow: some View {
+        HStack(spacing: 7) {
+            Image(systemName: "folder.badge.plus")
+                .foregroundStyle(.secondary)
+                .frame(width: 14)
+
+            VStack(alignment: .leading, spacing: 1) {
+                Text("Empty Folder")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                Text("Right-click to add files")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+            }
+
+            Spacer(minLength: 0)
+        }
+        .padding(.vertical, 4)
+        .padding(.horizontal, 4)
+        .contentShape(Rectangle())
+        .contextMenu {
+            projectRootContextMenu
+        }
+        .help("Right-click to create files or folders")
+    }
+
+    @ViewBuilder
+    private var projectRootContextMenu: some View {
+        Button("New Folder") {
+            viewModel.promptCreateFolder(in: "")
+        }
+
+        Button("New File") {
+            viewModel.promptCreateFile(in: "")
+        }
+
+        Divider()
+
+        Button("Paste") {
+            viewModel.pasteIntoDirectory("")
+        }
+        .disabled(viewModel.canPasteIntoDirectory("") == false)
+
+        Divider()
+
+        Button("Reveal in Finder") {
+            viewModel.openProjectInFinder()
+        }
+
+        Button("Copy Path") {
+            viewModel.copyProjectRootPath()
         }
     }
 
@@ -996,6 +1070,22 @@ struct MacRootView: View {
         case .error:
             return .red
         }
+    }
+
+    private var sidebarProjectPath: String {
+        guard let rootURL = viewModel.projectRoot else {
+            return ""
+        }
+
+        let fullPath = rootURL.standardizedFileURL.path
+        let segments = fullPath.split(separator: "/").map(String.init)
+        let suffixCount = min(3, segments.count) // project folder + 2 parents
+        let compact = segments.suffix(suffixCount).joined(separator: "/")
+
+        if segments.count > suffixCount {
+            return ".../" + compact
+        }
+        return compact
     }
 
     private var syntaxCommandBinding: Binding<Color> {
@@ -1331,9 +1421,54 @@ private struct SyntaxColorRow: View {
         HStack(spacing: 8) {
             Text(label)
                 .frame(maxWidth: .infinity, alignment: .leading)
-            ColorPicker("", selection: $color, supportsOpacity: false)
-                .labelsHidden()
-                .frame(width: 44, alignment: .trailing)
+            SyntaxColorWell(color: $color)
+                .frame(width: 44, height: 22, alignment: .trailing)
+        }
+    }
+}
+
+private struct SyntaxColorWell: NSViewRepresentable {
+    @Binding var color: Color
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(color: $color)
+    }
+
+    func makeNSView(context: Context) -> NSColorWell {
+        let colorWell = NSColorWell(frame: .zero)
+        colorWell.color = context.coordinator.nsColor(from: color)
+        colorWell.target = context.coordinator
+        colorWell.action = #selector(Coordinator.colorDidChange(_:))
+        return colorWell
+    }
+
+    func updateNSView(_ nsView: NSColorWell, context: Context) {
+        context.coordinator.color = $color
+        let resolved = context.coordinator.nsColor(from: color)
+        if nsView.color.isEqual(resolved) == false {
+            nsView.color = resolved
+        }
+    }
+
+    final class Coordinator: NSObject {
+        var color: Binding<Color>
+
+        init(color: Binding<Color>) {
+            self.color = color
+        }
+
+        @objc
+        func colorDidChange(_ sender: NSColorWell) {
+            let resolved =
+                sender.color.usingColorSpace(.extendedSRGB) ??
+                sender.color.usingColorSpace(.sRGB) ??
+                sender.color
+            color.wrappedValue = Color(nsColor: resolved)
+        }
+
+        func nsColor(from color: Color) -> NSColor {
+            let resolved = NSColor(color)
+            return resolved.usingColorSpace(.extendedSRGB) ?? resolved.usingColorSpace(.sRGB) ?? resolved
         }
     }
 }
@@ -1535,6 +1670,59 @@ private struct ToolbarMenuCapsule: View {
             RoundedRectangle(cornerRadius: 8, style: .continuous)
                 .stroke(Color.primary.opacity(0.10), lineWidth: 1)
         }
+        .onHover { hover in
+            guard hover != isHovered else { return }
+            DispatchQueue.main.async {
+                isHovered = hover
+            }
+        }
+    }
+}
+
+private struct SpeedCompileToolbarButton: View {
+    @Binding var isEnabled: Bool
+    @State private var isHovered = false
+
+    private var fillColor: Color {
+        if isEnabled {
+            return Color.accentColor.opacity(isHovered ? 0.24 : 0.18)
+        }
+        return Color(nsColor: .controlBackgroundColor).opacity(isHovered ? 0.90 : 0.78)
+    }
+
+    private var strokeColor: Color {
+        isEnabled ? Color.accentColor.opacity(0.48) : Color.primary.opacity(0.10)
+    }
+
+    var body: some View {
+        Button {
+            isEnabled.toggle()
+        } label: {
+            HStack(spacing: 5) {
+                Image(systemName: isEnabled ? "photo.badge.checkmark" : "photo")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(isEnabled ? Color.accentColor : Color.secondary)
+
+                Text("Speed")
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(isEnabled ? Color.primary : Color.secondary)
+            }
+            .padding(.leading, 8)
+            .padding(.trailing, 9)
+            .padding(.vertical, 5)
+            .background(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(fillColor)
+            )
+            .overlay {
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .stroke(strokeColor, lineWidth: 1)
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Speed Compile")
+        .accessibilityValue(isEnabled ? "On" : "Off")
+        .help(isEnabled ? "Speed Compile is using figure placeholders" : "Use figure placeholders while compiling")
         .onHover { hover in
             guard hover != isHovered else { return }
             DispatchQueue.main.async {

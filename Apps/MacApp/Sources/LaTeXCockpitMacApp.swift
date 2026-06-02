@@ -113,6 +113,15 @@ struct RaagtexMacApp: App {
                     activeViewModel?.projectRoot == nil ||
                     activeViewModel?.compilePreflightError != nil
                 )
+
+                Divider()
+
+                Button {
+                    activeViewModel?.speedCompileEnabled.toggle()
+                } label: {
+                    menuCheckLabel("Speed Compile", isOn: activeViewModel?.speedCompileEnabled == true)
+                }
+                .disabled(activeViewModel?.projectRoot == nil)
             }
 
             CommandMenu("Experience") {
@@ -183,6 +192,12 @@ struct RaagtexMacApp: App {
                         activeViewModel.editorLineNumbersEnabled.toggle()
                     } label: {
                         menuCheckLabel("Line Numbers", isOn: activeViewModel.editorLineNumbersEnabled)
+                    }
+
+                    Button {
+                        activeViewModel.confirmCloseWithUnsavedChanges.toggle()
+                    } label: {
+                        menuCheckLabel("Confirm Unsaved Close", isOn: activeViewModel.confirmCloseWithUnsavedChanges)
                     }
 
                     Divider()
@@ -387,10 +402,15 @@ private struct WorkspaceWindowHost: View {
     }
 
     var body: some View {
+        let viewModel = sessionRegistry.viewModel(for: resolvedWindowID)
+
         MacRootView(windowID: resolvedWindowID)
-            .environmentObject(sessionRegistry.viewModel(for: resolvedWindowID))
+            .environmentObject(viewModel)
             .background {
-                WindowIdentityBinder(identifier: sessionRegistry.windowIdentifier(for: resolvedWindowID))
+                WindowIdentityBinder(
+                    identifier: sessionRegistry.windowIdentifier(for: resolvedWindowID),
+                    shouldClose: { viewModel.confirmCloseWindowIfNeeded() }
+                )
             }
             .onAppear {
                 if windowID == nil {
@@ -423,19 +443,43 @@ private struct ViewerWindowHost: View {
 
 private struct WindowIdentityBinder: NSViewRepresentable {
     let identifier: NSUserInterfaceItemIdentifier
+    var shouldClose: (() -> Bool)?
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(shouldClose: shouldClose)
+    }
 
     func makeNSView(context: Context) -> NSView {
         let view = NSView()
         DispatchQueue.main.async {
             view.window?.identifier = identifier
+            if shouldClose != nil {
+                view.window?.delegate = context.coordinator
+            }
         }
         return view
     }
 
     func updateNSView(_ nsView: NSView, context: Context) {
+        context.coordinator.shouldClose = shouldClose
         guard let window = nsView.window else { return }
         if window.identifier != identifier {
             window.identifier = identifier
+        }
+        if shouldClose != nil, window.delegate !== context.coordinator {
+            window.delegate = context.coordinator
+        }
+    }
+
+    final class Coordinator: NSObject, NSWindowDelegate {
+        var shouldClose: (() -> Bool)?
+
+        init(shouldClose: (() -> Bool)?) {
+            self.shouldClose = shouldClose
+        }
+
+        func windowShouldClose(_ sender: NSWindow) -> Bool {
+            shouldClose?() ?? true
         }
     }
 }

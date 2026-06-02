@@ -1,0 +1,43 @@
+name: raagtex-ios
+options:
+  createIntermediateGroups: true
+  minimumXcodeGenVersion: 2.45.0
+settings:
+  base:
+    SWIFT_VERSION: 5.10
+    IPHONEOS_DEPLOYMENT_TARGET: 17.0
+packages:
+  LocalPackage:
+    path: ../../..
+targets:
+  raagtex-ios:
+    type: application
+    platform: iOS
+    deploymentTarget: "17.0"
+    sources:
+      - path: ../Sources
+    dependencies:
+      - package: LocalPackage
+        product: Core
+      - package: LocalPackage
+        product: Shared
+    settings:
+      base:
+        PRODUCT_NAME: raagtex-ios
+        PRODUCT_BUNDLE_IDENTIFIER: com.raaghavt.raagtex.ios
+        CODE_SIGN_STYLE: Automatic
+        DEVELOPMENT_TEAM: ""
+        CURRENT_PROJECT_VERSION: 1
+        MARKETING_VERSION: 1.0
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_CFBundleDisplayName: raagtex
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+schemes:
+  raagtex-ios:
+    build:
+      targets:
+        raagtex-ios: all
+    run:
+      config: Debug
+    archive:
+      config: Release

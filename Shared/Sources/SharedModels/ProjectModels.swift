@@ -197,6 +197,7 @@ public struct UserSettings: Codable, Hashable, Sendable {
     public var mainTexRelativePath: String?
     public var latexEngine: CompileEngine
     public var autoCompileEnabled: Bool
+    public var speedCompileEnabled: Bool
     public var interfaceTheme: InterfaceTheme
     public var interfaceMode: InterfaceMode
     public var interfaceTransparency: Double
@@ -204,6 +205,7 @@ public struct UserSettings: Codable, Hashable, Sendable {
     public var editorAutoCorrectEnabled: Bool
     public var editorSyntaxColoringEnabled: Bool
     public var editorLineNumbersEnabled: Bool
+    public var confirmCloseWithUnsavedChanges: Bool
     public var editorFontSize: Double
     public var customPalette: CustomThemePalette
     public var gitHelpersEnabled: Bool
@@ -222,6 +224,7 @@ public struct UserSettings: Codable, Hashable, Sendable {
         mainTexRelativePath: String? = nil,
         latexEngine: CompileEngine = .pdfLaTeX,
         autoCompileEnabled: Bool = false,
+        speedCompileEnabled: Bool = false,
         interfaceTheme: InterfaceTheme = .dark,
         interfaceMode: InterfaceMode = .debug,
         interfaceTransparency: Double = 0.78,
@@ -229,6 +232,7 @@ public struct UserSettings: Codable, Hashable, Sendable {
         editorAutoCorrectEnabled: Bool = true,
         editorSyntaxColoringEnabled: Bool = true,
         editorLineNumbersEnabled: Bool = false,
+        confirmCloseWithUnsavedChanges: Bool = true,
         editorFontSize: Double = 15.0,
         customPalette: CustomThemePalette = .init(),
         gitHelpersEnabled: Bool = true,
@@ -246,6 +250,7 @@ public struct UserSettings: Codable, Hashable, Sendable {
         self.mainTexRelativePath = mainTexRelativePath
         self.latexEngine = latexEngine
         self.autoCompileEnabled = autoCompileEnabled
+        self.speedCompileEnabled = speedCompileEnabled
         self.interfaceTheme = interfaceTheme
         self.interfaceMode = interfaceMode
         self.interfaceTransparency = interfaceTransparency
@@ -253,6 +258,7 @@ public struct UserSettings: Codable, Hashable, Sendable {
         self.editorAutoCorrectEnabled = editorAutoCorrectEnabled
         self.editorSyntaxColoringEnabled = editorSyntaxColoringEnabled
         self.editorLineNumbersEnabled = editorLineNumbersEnabled
+        self.confirmCloseWithUnsavedChanges = confirmCloseWithUnsavedChanges
         self.editorFontSize = editorFontSize
         self.customPalette = customPalette
         self.gitHelpersEnabled = gitHelpersEnabled
@@ -272,6 +278,7 @@ public struct UserSettings: Codable, Hashable, Sendable {
         case mainTexRelativePath
         case latexEngine
         case autoCompileEnabled
+        case speedCompileEnabled
         case interfaceTheme
         case interfaceMode
         case interfaceTransparency
@@ -279,6 +286,7 @@ public struct UserSettings: Codable, Hashable, Sendable {
         case editorAutoCorrectEnabled
         case editorSyntaxColoringEnabled
         case editorLineNumbersEnabled
+        case confirmCloseWithUnsavedChanges
         case editorFontSize
         case customPalette
         case gitHelpersEnabled
@@ -299,6 +307,7 @@ public struct UserSettings: Codable, Hashable, Sendable {
         mainTexRelativePath = try container.decodeIfPresent(String.self, forKey: .mainTexRelativePath)
         latexEngine = try container.decodeIfPresent(CompileEngine.self, forKey: .latexEngine) ?? .pdfLaTeX
         autoCompileEnabled = try container.decodeIfPresent(Bool.self, forKey: .autoCompileEnabled) ?? false
+        speedCompileEnabled = try container.decodeIfPresent(Bool.self, forKey: .speedCompileEnabled) ?? false
         interfaceTheme = try container.decodeIfPresent(InterfaceTheme.self, forKey: .interfaceTheme) ?? .dark
         interfaceMode = try container.decodeIfPresent(InterfaceMode.self, forKey: .interfaceMode) ?? .debug
         interfaceTransparency = try container.decodeIfPresent(Double.self, forKey: .interfaceTransparency) ?? 0.78
@@ -306,6 +315,7 @@ public struct UserSettings: Codable, Hashable, Sendable {
         editorAutoCorrectEnabled = try container.decodeIfPresent(Bool.self, forKey: .editorAutoCorrectEnabled) ?? true
         editorSyntaxColoringEnabled = try container.decodeIfPresent(Bool.self, forKey: .editorSyntaxColoringEnabled) ?? true
         editorLineNumbersEnabled = try container.decodeIfPresent(Bool.self, forKey: .editorLineNumbersEnabled) ?? false
+        confirmCloseWithUnsavedChanges = try container.decodeIfPresent(Bool.self, forKey: .confirmCloseWithUnsavedChanges) ?? true
         editorFontSize = try container.decodeIfPresent(Double.self, forKey: .editorFontSize) ?? 15.0
         customPalette = try container.decodeIfPresent(CustomThemePalette.self, forKey: .customPalette) ?? .init()
         gitHelpersEnabled = try container.decodeIfPresent(Bool.self, forKey: .gitHelpersEnabled) ?? true
@@ -326,6 +336,7 @@ public struct UserSettings: Codable, Hashable, Sendable {
         try container.encodeIfPresent(mainTexRelativePath, forKey: .mainTexRelativePath)
         try container.encode(latexEngine, forKey: .latexEngine)
         try container.encode(autoCompileEnabled, forKey: .autoCompileEnabled)
+        try container.encode(speedCompileEnabled, forKey: .speedCompileEnabled)
         try container.encode(interfaceTheme, forKey: .interfaceTheme)
         try container.encode(interfaceMode, forKey: .interfaceMode)
         try container.encode(interfaceTransparency, forKey: .interfaceTransparency)
@@ -333,6 +344,7 @@ public struct UserSettings: Codable, Hashable, Sendable {
         try container.encode(editorAutoCorrectEnabled, forKey: .editorAutoCorrectEnabled)
         try container.encode(editorSyntaxColoringEnabled, forKey: .editorSyntaxColoringEnabled)
         try container.encode(editorLineNumbersEnabled, forKey: .editorLineNumbersEnabled)
+        try container.encode(confirmCloseWithUnsavedChanges, forKey: .confirmCloseWithUnsavedChanges)
         try container.encode(editorFontSize, forKey: .editorFontSize)
         try container.encode(customPalette, forKey: .customPalette)
         try container.encode(gitHelpersEnabled, forKey: .gitHelpersEnabled)

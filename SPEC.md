@@ -28,13 +28,14 @@ raagtex is a calm, native Apple experience for local LaTeX workflows: write in y
   - in-app manager (`File -> Edit Templates…`) with text preview, PDF-preview placeholder toggle, and editable template display names independent of file names
   - one-click style insertion into current project (`File -> Add Style…`)
 - Compile via `latexmk`
+- Speed Compile mode that replaces `graphicx` figures with placeholders for faster drafting on image-heavy documents
 - Preflight guard that blocks compile attempts when the selected main file is not a valid document shell (`\documentclass` + `\begin{document}`)
-- Basic structured compile output model
+- Basic structured compile output model with macOS inline editor diagnostics for line-specific errors
 - PDF preview pane with optional pop-out viewer window and directional editor/preview layouts (left-right, right-left, top-bottom, bottom-top) plus an editor-only mode (no PDF pane)
 - Auto-compile toggle
 - Phase 0 local Git workflow helpers (status/stage/commit/pull/push/sync, with optional stage-on-save and auto-pull)
 - Recent project persistence
-- Settings model for engine/main file/auto-compile/theme/mode/transparency/layout/editor text size plus clear-mode background blur/material/tint controls with fallback renderer options
+- Settings model for engine/main file/auto-compile/speed-compile/theme/mode/transparency/layout/editor text size plus clear-mode background blur/material/tint controls with fallback renderer options
 - UI themes include light, dark, and clear-transparency variants
 - iPad app shell with:
   - local folder opening
@@ -62,7 +63,7 @@ raagtex is a calm, native Apple experience for local LaTeX workflows: write in y
 - Native Apple-stack project
 - SwiftUI-first approach
 - macOS + iPad as primary local workflow targets
-- iOS compile execution remains constrained by platform process limits; synced artifacts from macOS remain part of roadmap
+- iOS compile executes on-device through an embedded WebAssembly TeX runtime; macOS compile/sync remains part of roadmap for heavy projects
 - Shared reusable module boundaries for models/services
 - Keep third-party dependencies minimal unless justified
 - Local compile execution with `latexmk` (system TeX install)
