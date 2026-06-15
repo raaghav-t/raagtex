@@ -876,22 +876,11 @@ struct MacRootView: View {
 
     @ToolbarContentBuilder
     private var windowToolbar: some ToolbarContent {
-        ToolbarItem(placement: .navigation) {
-            HStack(spacing: 10) {
-                Text("raagtex")
-                    .font(.headline.weight(.semibold))
-                if viewModel.projectRoot != nil {
-                    Text(viewModel.projectDisplayName)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                }
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 4)
-        }
-
         if viewModel.projectRoot != nil {
+            if #available(macOS 26.0, *) {
+                ToolbarSpacer(.flexible, placement: .primaryAction)
+            }
+
             ToolbarItemGroup(placement: .primaryAction) {
                 Menu {
                     if viewModel.texFiles.isEmpty {
@@ -931,19 +920,18 @@ struct MacRootView: View {
 
                 SpeedCompileToolbarButton(isEnabled: $viewModel.speedCompileEnabled)
                     .padding(.leading, 4)
-                    .padding(.trailing, 10)
-            }
+                    .padding(.trailing, 8)
 
-            ToolbarItem(placement: .primaryAction) {
                 Text(viewModel.statusLine)
                     .font(.callout.weight(.medium))
                     .foregroundStyle(.secondary)
-                    .frame(minWidth: 130, alignment: .trailing)
-                    .padding(.trailing, 14)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .frame(width: 138, alignment: .trailing)
+                    .padding(.leading, 2)
+                    .padding(.trailing, 8)
                     .animation(.none, value: viewModel.statusLine)
-            }
 
-            ToolbarItemGroup(placement: .primaryAction) {
                 Button {
                     viewModel.compileNow(trigger: .manual)
                 } label: {

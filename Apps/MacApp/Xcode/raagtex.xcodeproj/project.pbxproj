@@ -18,6 +18,7 @@
 		907587F43A190281DC28FB5B /* ProjectScanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7A18ACE734E17DBCF69C8BF /* ProjectScanner.swift */; };
 		B15E9C4A1D2F3A4B5C6D7E8F /* TemplateModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = D37ABE6C3F4A5B6C7D8E9F01 /* TemplateModels.swift */; };
 		BB03FBFE662641347058AB2B /* MacRootViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0FA4AB9C94696B0497338CAE /* MacRootViewModel.swift */; };
+		BF41C6E02FD0D25400616251 /* iconLogo.icon in Resources */ = {isa = PBXBuildFile; fileRef = BF41C6DF2FD0D25400616251 /* iconLogo.icon */; };
 		C26FAD5B2E3A4B5C6D7E8F90 /* TemplatePanels.swift in Sources */ = {isa = PBXBuildFile; fileRef = E48BCF7D4A5B6C7D8E9F0123 /* TemplatePanels.swift */; };
 		F0000E73F50C1AD16898FBCA /* PDFPreviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9E5986DEA7E97881EC1902A8 /* PDFPreviewView.swift */; };
 		FA7666A63F13518F926C61C9 /* Shared in Frameworks */ = {isa = PBXBuildFile; productRef = B8E6D0AD53F2FC1E52717D78 /* Shared */; };
@@ -34,6 +35,7 @@
 		9E8EA586C3941A49EC4E609A /* DirectoryWatcher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DirectoryWatcher.swift; sourceTree = "<group>"; };
 		A3333B48F3FDF92EA1389962 /* LatexSyntaxEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LatexSyntaxEditorView.swift; sourceTree = "<group>"; };
 		B40CCA5DF5AFEDAD9807482C /* raagtex.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = raagtex.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		BF41C6DF2FD0D25400616251 /* iconLogo.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; path = iconLogo.icon; sourceTree = "<group>"; };
 		C6C1B96568277A25AD8019A6 /* raagtex */ = {isa = PBXFileReference; lastKnownFileType = folder; name = raagtex; path = ../../..; sourceTree = SOURCE_ROOT; };
 		D37ABE6C3F4A5B6C7D8E9F01 /* TemplateModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TemplateModels.swift; sourceTree = "<group>"; };
 		D7A18ACE734E17DBCF69C8BF /* ProjectScanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectScanner.swift; sourceTree = "<group>"; };
@@ -56,6 +58,7 @@
 		47B245E61C4418FD9B89F706 /* Packages */ = {
 			isa = PBXGroup;
 			children = (
+				BF41C6DF2FD0D25400616251 /* iconLogo.icon */,
 				C6C1B96568277A25AD8019A6 /* raagtex */,
 			);
 			name = Packages;
@@ -171,6 +174,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				BF41C6E02FD0D25400616251 /* iconLogo.icon in Resources */,
 				16307A2128BDCE6E372674A0 /* Assets.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -258,7 +262,8 @@
 		54EC43E382F7F32389D594F0 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_APPICON_NAME = iconLogo;
+				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CODE_SIGN_ENTITLEMENTS = raagtex.entitlements;
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
@@ -284,7 +289,8 @@
 		5A5E671A245593DE1268E878 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_APPICON_NAME = iconLogo;
+				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CODE_SIGN_ENTITLEMENTS = raagtex.entitlements;
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;

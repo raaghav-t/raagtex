@@ -1,0 +1,250 @@
+{
+  "fill" : {
+    "automatic-gradient" : "display-p3:0.06310,0.21094,0.35222,1.00000"
+  },
+  "groups" : [
+    {
+      "blend-mode-specializations" : [
+        {
+          "appearance" : "tinted",
+          "value" : "normal"
+        }
+      ],
+      "blur-material" : null,
+      "hidden" : false,
+      "layers" : [
+        {
+          "blend-mode" : "screen",
+          "fill" : {
+            "linear-gradient" : [
+              "display-p3:1.05133,0.25369,0.77604,1.00000",
+              "display-p3:0.93725,0.05098,0.63137,1.00000"
+            ],
+            "orientation" : {
+              "start" : {
+                "x" : 0.5,
+                "y" : 0.15797159954407294
+              },
+              "stop" : {
+                "x" : 0.5,
+                "y" : 0.5
+              }
+            }
+          },
+          "glass" : true,
+          "hidden" : false,
+          "image-name" : "Image 3.heif",
+          "name" : "Image 3",
+          "opacity" : 0.75,
+          "position" : {
+            "scale" : 3.5,
+            "translation-in-points" : [
+              2.5,
+              0
+            ]
+          }
+        },
+        {
+          "blend-mode" : "multiply",
+          "fill" : {
+            "linear-gradient" : [
+              "display-p3:1.05133,0.25369,0.77604,1.00000",
+              "display-p3:0.93725,0.05098,0.63137,1.00000"
+            ],
+            "orientation" : {
+              "start" : {
+                "x" : 0.5,
+                "y" : 0.15797159954407294
+              },
+              "stop" : {
+                "x" : 0.5,
+                "y" : 0.5
+              }
+            }
+          },
+          "glass" : true,
+          "hidden" : false,
+          "image-name" : "Image 3.heif",
+          "name" : "Image 3",
+          "opacity" : 0.75,
+          "position" : {
+            "scale" : 3.5,
+            "translation-in-points" : [
+              2.5,
+              0
+            ]
+          }
+        }
+      ],
+      "lighting" : "individual",
+      "shadow" : {
+        "kind" : "neutral",
+        "opacity" : 1
+      },
+      "specular" : true,
+      "translucency" : {
+        "enabled" : true,
+        "value" : 0.5
+      }
+    },
+    {
+      "hidden" : true,
+      "layers" : [
+        {
+          "image-name" : "Image 4.heif",
+          "name" : "Image 4",
+          "position" : {
+            "scale" : 2.5,
+            "translation-in-points" : [
+              -208.65625,
+              76.6015625
+            ]
+          }
+        },
+        {
+          "image-name" : "Image 3.heif",
+          "name" : "Image 3",
+          "position" : {
+            "scale" : 2.5,
+            "translation-in-points" : [
+              219.0234375,
+              -44.265625
+            ]
+          }
+        }
+      ],
+      "shadow" : {
+        "kind" : "neutral",
+        "opacity" : 0.5
+      },
+      "translucency" : {
+        "enabled" : true,
+        "value" : 0.5
+      }
+    },
+    {
+      "hidden" : true,
+      "layers" : [
+        {
+          "blend-mode-specializations" : [
+            {
+              "value" : "plus-lighter"
+            },
+            {
+              "appearance" : "tinted",
+              "value" : "lighten"
+            }
+          ],
+          "fill" : {
+            "linear-gradient" : [
+              "display-p3:0.93725,0.05098,0.63137,1.00000",
+              "display-p3:0.47451,0.12549,1.00000,1.00000"
+            ],
+            "orientation" : {
+              "start" : {
+                "x" : 0.5,
+                "y" : 0.5748889399509803
+              },
+              "stop" : {
+                "x" : 0.5,
+                "y" : 0
+              }
+            }
+          },
+          "glass" : true,
+          "image-name" : "Image 2.heif",
+          "name" : "Image 2",
+          "opacity" : 0.5,
+          "position" : {
+            "scale" : 2,
+            "translation-in-points" : [
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "blend-mode-specializations" : [
+            {
+              "value" : "multiply"
+            },
+            {
+              "appearance" : "tinted",
+              "value" : "lighten"
+            }
+          ],
+          "fill" : {
+            "linear-gradient" : [
+              "display-p3:0.93725,0.05098,0.63137,1.00000",
+              "display-p3:0.47451,0.12549,1.00000,1.00000"
+            ],
+            "orientation" : {
+              "start" : {
+                "x" : 0.5,
+                "y" : 0.5748889399509803
+              },
+              "stop" : {
+                "x" : 0.5,
+                "y" : 0
+              }
+            }
+          },
+          "glass" : true,
+          "image-name" : "Image 2.heif",
+          "name" : "Image 2",
+          "opacity" : 0.75,
+          "position" : {
+            "scale" : 2,
+            "translation-in-points" : [
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "blend-mode" : "overlay",
+          "fill" : {
+            "linear-gradient" : [
+              "display-p3:0.90000,0.90000,0.90000,1.00000",
+              "extended-gray:1.00000,1.00000"
+            ],
+            "orientation" : {
+              "start" : {
+                "x" : 0.5,
+                "y" : 1
+              },
+              "stop" : {
+                "x" : 0.5,
+                "y" : 0.3
+              }
+            }
+          },
+          "image-name" : "Image 6.heif",
+          "name" : "Image 6",
+          "opacity" : 0.75,
+          "position" : {
+            "scale" : 1.75,
+            "translation-in-points" : [
+              0.875,
+              0
+            ]
+          }
+        }
+      ],
+      "shadow" : {
+        "kind" : "neutral",
+        "opacity" : 0.5
+      },
+      "translucency" : {
+        "enabled" : true,
+        "value" : 0.5
+      }
+    }
+  ],
+  "supported-platforms" : {
+    "circles" : [
+      "watchOS"
+    ],
+    "squares" : "shared"
+  }
+}
