@@ -25,7 +25,7 @@ raagtex is a calm, native Apple experience for local LaTeX workflows: write in y
 - Browse project files from a sidebar explorer, pick `.tex` files directly, and hide common LaTeX-generated supplementary artifacts
 - Template workflow for new files:
   - document-template and style-template `.tex` libraries
-  - in-app manager (`File -> Edit Templates…`) with text preview, PDF-preview placeholder toggle, and editable template display names independent of file names
+  - in-app manager (`File -> Edit Templates…`) with adaptive text preview, latexmk-backed PDF preview, and editable template display names independent of file names
   - one-click style insertion into current project (`File -> Add Style…`)
 - Compile via `latexmk`
 - Speed Compile mode that replaces `graphicx` figures with placeholders for faster drafting on image-heavy documents

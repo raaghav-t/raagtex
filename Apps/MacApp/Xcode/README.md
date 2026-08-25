@@ -1,6 +1,6 @@
 # Xcode Wrapper (macOS Release)
 
-This folder contains a signing/archive-ready Xcode project for macOS App Store distribution.
+This folder contains a signing/archive-ready Xcode project for macOS distribution.
 
 ## Open
 - Open [raagtex.xcodeproj](/Users/raaghavt/Documents/GitHub/raagtex/Apps/MacApp/Xcode/raagtex.xcodeproj)
@@ -11,8 +11,8 @@ In **Signing & Capabilities**:
 1. Team: your Apple Developer team
 2. Bundle Identifier: `com.raaghavt.raagtex`
 3. Signing Certificate: Apple Distribution (for archive)
-4. Keep **App Sandbox** enabled
-5. Keep **User Selected File Read/Write** enabled via `raagtex.entitlements`
+4. Keep **App Sandbox** disabled for the current local-compile target. The macOS app launches the user's installed TeX tools (`latexmk`, `pdflatex`, etc.), which is not compatible with the sandbox without a future managed toolchain flow.
+5. Keep **User Selected File Read/Write** enabled via `raagtex.entitlements` if sandboxed distribution is revisited later.
 
 ## Versioning
 In target settings:

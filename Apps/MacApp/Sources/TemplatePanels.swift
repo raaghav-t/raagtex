@@ -118,6 +118,7 @@ struct TemplateManagerPanel: View {
 
                 TemplatePreviewPane(
                     previewMode: $previewMode,
+                    template: selectedTemplate,
                     text: viewModel.templatePreviewText(for: selectedTemplate)
                 )
             }
@@ -240,7 +241,11 @@ struct NewTemplateFilePanel: View {
             }
             .pickerStyle(.menu)
 
-            TemplatePreviewPane(previewMode: $previewMode, text: previewText)
+            TemplatePreviewPane(
+                previewMode: $previewMode,
+                template: selectedDocumentTemplate ?? selectedStyleTemplate,
+                text: previewText
+            )
                 .frame(minHeight: 250)
 
             HStack {
@@ -326,6 +331,7 @@ struct AddStyleToProjectPanel: View {
 
                     TemplatePreviewPane(
                         previewMode: $previewMode,
+                        template: selectedStyle,
                         text: viewModel.templatePreviewText(for: selectedStyle)
                     )
                 }
@@ -358,8 +364,13 @@ struct AddStyleToProjectPanel: View {
 }
 
 private struct TemplatePreviewPane: View {
+    @Environment(\.colorScheme) private var colorScheme
+    @EnvironmentObject private var viewModel: MacRootViewModel
+
     @Binding var previewMode: TemplatePreviewMode
+    let template: TemplateEntry?
     let text: String
+    @State private var previewRefreshNonce = 0
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -372,10 +383,15 @@ private struct TemplatePreviewPane: View {
                 .pickerStyle(.segmented)
                 .frame(width: 180)
 
-                Button("Wire PDF Preview") {}
+                Button {
+                    previewRefreshNonce += 1
+                    viewModel.prepareTemplatePDFPreview(for: template, force: true)
+                } label: {
+                    Label("Reload", systemImage: "arrow.clockwise")
+                }
                     .buttonStyle(.bordered)
-                    .disabled(true)
-                    .help("Placeholder: wire this into PDF first-page preview next.")
+                    .disabled(canReloadPDFPreview == false)
+                    .help("Rebuild the PDF preview")
 
                 Spacer(minLength: 0)
             }
@@ -385,23 +401,92 @@ private struct TemplatePreviewPane: View {
                     ScrollView {
                         Text(text)
                             .font(.system(.footnote, design: .monospaced))
+                            .foregroundStyle(.primary)
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .textSelection(.enabled)
                             .padding(12)
                     }
+                    .scrollContentBackground(.hidden)
                 } else {
-                    ContentUnavailableView(
-                        "PDF Preview Not Wired Yet",
-                        systemImage: "doc.richtext",
-                        description: Text("Use the button above as the integration point for first-page PDF preview.")
-                    )
+                    pdfPreviewContent
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(
                 RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(Color(nsColor: .textBackgroundColor).opacity(0.45))
+                    .fill(previewBackground)
             )
+            .overlay(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .stroke(Color(nsColor: .separatorColor).opacity(colorScheme == .dark ? 0.55 : 0.3))
+            )
+        }
+        .task(id: previewTaskID) {
+            guard previewMode == .pdf else { return }
+            viewModel.prepareTemplatePDFPreview(for: template)
+        }
+    }
+
+    private var previewBackground: Color {
+        colorScheme == .dark
+            ? Color(nsColor: .textBackgroundColor).opacity(0.72)
+            : Color(nsColor: .textBackgroundColor)
+    }
+
+    private var canReloadPDFPreview: Bool {
+        guard previewMode == .pdf, template != nil else { return false }
+        if case .running = viewModel.templatePDFPreviewState(for: template).status {
+            return false
+        }
+        return true
+    }
+
+    private var previewTaskID: String {
+        [
+            previewMode.rawValue,
+            template?.id ?? "none",
+            viewModel.templatePDFPreviewState(for: template).sourceSignature,
+            "\(previewRefreshNonce)"
+        ].joined(separator: "|")
+    }
+
+    @ViewBuilder
+    private var pdfPreviewContent: some View {
+        if template == nil {
+            ContentUnavailableView(
+                "No Template Selected",
+                systemImage: "doc.richtext",
+                description: Text("Select a template to build a PDF preview.")
+            )
+        } else {
+            switch viewModel.templatePDFPreviewState(for: template).status {
+            case .idle:
+                ContentUnavailableView(
+                    "Preparing PDF Preview",
+                    systemImage: "doc.richtext",
+                    description: Text("The preview will build automatically.")
+                )
+            case .running:
+                VStack(spacing: 10) {
+                    ProgressView()
+                    Text("Building PDF preview...")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            case .ready(let pdfURL, let refreshToken):
+                PDFPreviewView(
+                    pdfURL: pdfURL,
+                    refreshToken: refreshToken,
+                    interfaceTheme: viewModel.interfaceTheme
+                )
+            case .failed(let message):
+                ContentUnavailableView(
+                    "Preview Failed",
+                    systemImage: "exclamationmark.triangle",
+                    description: Text(message)
+                )
+            }
         }
     }
 }

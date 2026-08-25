@@ -44,4 +44,10 @@ final class CompileRequestTests: XCTestCase {
 
         XCTAssertTrue(path.split(separator: ":").contains("/Library/TeX/texbin"))
     }
+
+    func testLatexToolchainSearchPathAddsVersionedTeXLiveLocation() {
+        let path = LatexToolchainProbe.latexToolSearchPath(environment: ["PATH": "/usr/bin"])
+
+        XCTAssertTrue(path.split(separator: ":").contains("/usr/local/texlive/2022/bin/universal-darwin"))
+    }
 }

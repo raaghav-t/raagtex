@@ -617,18 +617,28 @@ struct MacRootView: View {
 
             Divider()
 
-            PDFPreviewView(
-                pdfURL: viewModel.documentState.pdfURL,
-                refreshToken: viewModel.documentState.lastCompileAt,
-                interfaceTheme: effectiveInterfaceTheme,
-                onInverseSearch: { target in
-                    viewModel.handlePDFInverseSearch(target)
-                },
-                onDocumentDisplayed: { displayedAt in
-                    viewModel.notePDFDisplayed(at: displayedAt)
-                }
-            )
+            if let pdfURL = viewModel.documentState.pdfURL {
+                PDFPreviewView(
+                    pdfURL: pdfURL,
+                    refreshToken: viewModel.documentState.lastCompileAt,
+                    interfaceTheme: effectiveInterfaceTheme,
+                    onInverseSearch: { target in
+                        viewModel.handlePDFInverseSearch(target)
+                    },
+                    onDocumentDisplayed: { displayedAt in
+                        viewModel.notePDFDisplayed(at: displayedAt)
+                    }
+                )
+                    .background(previewBackground)
+            } else {
+                ContentUnavailableView(
+                    "No PDF Yet",
+                    systemImage: "doc.richtext",
+                    description: Text("Compile once to show the PDF preview.")
+                )
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(previewBackground)
+            }
         }
         .background {
             RoundedRectangle(cornerRadius: 16, style: .continuous)
@@ -884,7 +894,7 @@ struct MacRootView: View {
             ToolbarItemGroup(placement: .primaryAction) {
                 Menu {
                     if viewModel.texFiles.isEmpty {
-                        Text("No .tex files")
+                        Text("No document .tex files")
                     } else {
                         ForEach(viewModel.texFiles, id: \.self) { path in
                             Button(path) {
@@ -894,7 +904,7 @@ struct MacRootView: View {
                     }
                 } label: {
                     ToolbarMenuCapsule(
-                        title: viewModel.texFiles.isEmpty ? "No .tex files" : (viewModel.selectedMainTex.isEmpty ? "No .tex files" : viewModel.selectedMainTex),
+                        title: viewModel.texFiles.isEmpty ? "No document .tex files" : (viewModel.selectedMainTex.isEmpty ? "No document .tex files" : viewModel.selectedMainTex),
                         minWidth: 220
                     )
                 }

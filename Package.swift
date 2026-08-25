@@ -41,6 +41,11 @@ let package = Package(
             name: "CoreTests",
             dependencies: ["Core"],
             path: "Core/Tests"
+        ),
+        .testTarget(
+            name: "MacAppTests",
+            dependencies: ["MacApp"],
+            path: "Apps/MacApp/Tests"
         )
     ]
 )
