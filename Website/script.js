@@ -1,26 +1,37 @@
 (function () {
-  var cards = document.querySelectorAll('.card, .hero');
-  cards.forEach(function (card) {
-    card.addEventListener('mousemove', function (event) {
-      var rect = card.getBoundingClientRect();
-      var x = (event.clientX - rect.left) / rect.width - 0.5;
-      var y = (event.clientY - rect.top) / rect.height - 0.5;
-      card.style.transform = 'perspective(900px) rotateX(' + (-y * 3.5) + 'deg) rotateY(' + (x * 4.5) + 'deg)';
-    });
+  var sections = Array.prototype.slice.call(document.querySelectorAll('main [id]'));
+  var links = Array.prototype.slice.call(document.querySelectorAll('.nav nav a[href^="#"]'));
+  var cards = Array.prototype.slice.call(document.querySelectorAll('.card'));
+  var reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-    card.addEventListener('mouseleave', function () {
-      card.style.transform = 'perspective(900px) rotateX(0deg) rotateY(0deg)';
+  function setActive(id) {
+    links.forEach(function (link) {
+      link.classList.toggle('active', link.getAttribute('href') === '#' + id);
     });
-  });
+  }
 
-  var blobs = document.querySelectorAll('.blob');
-  window.addEventListener('mousemove', function (event) {
-    var x = event.clientX / window.innerWidth;
-    var y = event.clientY / window.innerHeight;
-    blobs.forEach(function (blob, index) {
-      var dx = (x - 0.5) * (10 + index * 8);
-      var dy = (y - 0.5) * (10 + index * 8);
-      blob.style.transform = 'translate(' + dx + 'px, ' + dy + 'px)';
-    });
-  }, { passive: true });
+  if ('IntersectionObserver' in window) {
+    var sectionObserver = new IntersectionObserver(function (entries) {
+      entries.forEach(function (entry) {
+        if (entry.isIntersecting) setActive(entry.target.id);
+      });
+    }, { rootMargin: '-18% 0px -68% 0px' });
+
+    sections.forEach(function (section) { sectionObserver.observe(section); });
+
+    if (!reducedMotion) {
+      var revealObserver = new IntersectionObserver(function (entries) {
+        entries.forEach(function (entry) {
+          if (!entry.isIntersecting) return;
+          entry.target.classList.add('visible');
+          revealObserver.unobserve(entry.target);
+        });
+      }, { rootMargin: '0px 0px -8% 0px' });
+
+      cards.forEach(function (card) {
+        card.classList.add('reveal');
+        revealObserver.observe(card);
+      });
+    }
+  }
 }());

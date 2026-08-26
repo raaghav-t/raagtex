@@ -6,6 +6,15 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Raagtex | Native LaTeX Cockpit</title>
   <meta name="description" content="Raagtex is a calm, native Apple-first LaTeX cockpit for local writing, compiling, and live PDF preview." />
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="Raagtex | Native LaTeX Cockpit" />
+  <meta property="og:description" content="Write, compile, and preview local LaTeX projects in one calm native workspace." />
+  <meta property="og:url" content="https://raagtex.com/" />
+  <meta property="og:image" content="https://raagtex.com/assets/screenshots/pinkBackApple.png" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Raagtex | Native LaTeX Cockpit" />
+  <meta name="twitter:description" content="Write, compile, and preview local LaTeX projects in one calm native workspace." />
+  <meta name="twitter:image" content="https://raagtex.com/assets/screenshots/pinkBackApple.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&amp;family=Sora:wght@500;700&amp;display=swap" rel="stylesheet" />
@@ -21,34 +30,53 @@
 
   <div class="shell">
     <aside class="nav glass">
-      <div class="logo">rg</div>
-      <div class="name">Raagtex</div>
-      <div class="muted">Native LaTeX Cockpit</div>
-      <a href="#overview">Overview</a>
-      <a href="#features">Features</a>
-      <a href="#architecture">Architecture</a>
-      <a href="#roadmap">Roadmap</a>
-      <a href="./privacy.html">Privacy Policy</a>
-      <a href="https://github.com/raaghavt/raagtex" target="_blank" rel="noopener">View Repository</a>
+      <a class="profile" href="https://raaghavt.com/">
+        <img class="avatar" src="./assets/profile.webp" alt="Raaghav Thirumaligai" />
+        <span class="profile-name">Raaghav Thirumaligai</span>
+        <span class="profile-role">Mechanical engineer · Product builder</span>
+      </a>
+      <p class="nav-kicker">Raagtex</p>
+      <nav aria-label="Raagtex website">
+        <a class="active" href="#overview"><span>00</span>Overview</a>
+        <a href="#features"><span>01</span>Features</a>
+        <a href="#architecture"><span>02</span>Architecture</a>
+        <a href="#screenshots"><span>03</span>Screenshots</a>
+        <a href="#roadmap"><span>04</span>Roadmap</a>
+      </nav>
+      <div class="nav-actions">
+        <a href="./privacy.html">Privacy policy</a>
+        <a class="nav-primary" href="https://github.com/raaghav-t/raagtex" target="_blank" rel="noopener">View repository ↗</a>
+      </div>
     </aside>
 
     <main class="content glass">
-      <section id="overview" class="hero glass">
-        <h1>Calm, native LaTeX workflow on macOS.</h1>
-        <p>
-          Raagtex keeps local writing, compile feedback, and PDF output in one elegant workspace.
-          It is built for researchers and technical writers who want focus, speed, and native Apple feel.
-        </p>
-        <div class="kpis">
-          <div class="kpi"><strong>macOS-first</strong><span>SwiftUI shell + native preview</span></div>
-          <div class="kpi"><strong>latexmk</strong><span>Fast compile loop with diagnostics</span></div>
-          <div class="kpi"><strong>Local-first</strong><span>No cloud lock-in or collaboration overhead</span></div>
+      <section id="overview" class="hero">
+        <div class="hero-copy">
+          <p class="eyebrow">Native macOS app · Local-first workflow</p>
+          <h1>Write the source.<br /><span>See the result.</span></h1>
+          <p class="hero-lede">
+            Raagtex brings editing, compile feedback, and live PDF output into one calm Apple-native workspace for researchers and technical writers.
+          </p>
+          <div class="hero-actions">
+            <a class="button button-primary" href="#screenshots">See the workspace</a>
+            <a class="button button-secondary" href="https://github.com/raaghavt/raagtex" target="_blank" rel="noopener">View repository ↗</a>
+          </div>
+          <div class="kpis">
+            <div class="kpi"><strong>Native</strong><span>SwiftUI shell and PDF preview</span></div>
+            <div class="kpi"><strong>Fast</strong><span><code>latexmk</code> compile loop with diagnostics</span></div>
+            <div class="kpi"><strong>Local</strong><span>Your projects remain on your Mac</span></div>
+          </div>
         </div>
+        <figure class="hero-media">
+          <img src="./assets/screenshots/pinkBackApple.png" alt="Raagtex editor and PDF preview on macOS" />
+          <figcaption>A focused writing surface with source and output in view.</figcaption>
+        </figure>
       </section>
 
       <section class="grid" id="features">
         <article class="card glass span-7">
-          <h2>What It Does Today</h2>
+          <p class="section-label">Core workflow</p>
+          <h2>Everything needed to move from source to PDF.</h2>
           <a class="preview-link" href="#features">
             <h3>Write + Compile + Preview</h3>
             <p>Open a local project, edit your main <code>.tex</code> file, compile with <code>latexmk</code>, and preview PDF output live.</p>
@@ -64,7 +92,8 @@
         </article>
 
         <article class="card glass span-5">
-          <h2>Core Tone</h2>
+          <p class="section-label">Product principles</p>
+          <h2>Native by design</h2>
           <span class="tag">SwiftUI-first</span>
           <span class="tag">Apple-native feel</span>
           <span class="tag">Restrained glass UI</span>
@@ -75,7 +104,8 @@
         </article>
 
         <article class="card glass span-5" id="architecture">
-          <h2>Architecture Snapshot</h2>
+          <p class="section-label">Under the surface</p>
+          <h2>Architecture snapshot</h2>
           <ul class="clean">
             <li><strong>Apps/MacApp:</strong> main shell, editor, compile controls, preview layout.</li>
             <li><strong>Apps/iOSApp:</strong> companion scaffold for future live viewer flow.</li>
@@ -85,7 +115,8 @@
         </article>
 
         <article class="card glass span-7" id="roadmap">
-          <h2>Near-Term Roadmap</h2>
+          <p class="section-label">What comes next</p>
+          <h2>Near-term roadmap</h2>
           <ul class="clean">
             <li>Accessibility pass for keyboard focus traversal and VoiceOver.</li>
             <li>Friendlier diagnostic grouping with source-jump hooks.</li>
@@ -94,8 +125,9 @@
           </ul>
         </article>
 
-        <article class="card glass span-12">
-          <h2>App Screenshots</h2>
+        <article class="card glass span-12" id="screenshots">
+          <p class="section-label">Product tour</p>
+          <h2>The workspace in light, dark, and stacked layouts.</h2>
           <div class="shots-grid">
             <figure class="shot">
               <div class="shot-media">
@@ -125,14 +157,15 @@
         </article>
 
         <article class="card glass span-12">
-          <h2>Project Links</h2>
+          <p class="section-label">Keep exploring</p>
+          <h2>Project links</h2>
           <p>
             Repository: <a class="inline" href="https://github.com/raaghavt/raagtex" target="_blank" rel="noopener">github.com/raaghavt/raagtex</a><br />
-            Product spec: <a class="inline" href="../SPEC.md" target="_blank" rel="noopener">SPEC.md</a><br />
-            Architecture notes: <a class="inline" href="../Docs/ARCHITECTURE.md" target="_blank" rel="noopener">Docs/ARCHITECTURE.md</a><br />
+            Product spec: <a class="inline" href="https://github.com/raaghav-t/raagtex/blob/main/SPEC.md" target="_blank" rel="noopener">SPEC.md</a><br />
+            Architecture notes: <a class="inline" href="https://github.com/raaghav-t/raagtex/blob/main/Docs/ARCHITECTURE.md" target="_blank" rel="noopener">Docs/ARCHITECTURE.md</a><br />
             Privacy policy: <a class="inline" href="./privacy.html">/privacy.html</a>
           </p>
-          <div class="footer">Last updated: April 10, 2026</div>
+          <div class="footer">Designed and built by Raaghav Thirumaligai.</div>
         </article>
       </section>
     </main>

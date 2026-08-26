@@ -18,14 +18,44 @@
 
     .legal-page {
       border-radius: 40px;
-      padding: 24px;
+      padding: clamp(22px, 4vw, 48px);
+    }
+
+    .legal-brand {
+      margin-bottom: 34px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      color: inherit;
+      text-decoration: none;
+    }
+
+    .legal-brand img {
+      width: 52px;
+      height: 52px;
+      border-radius: 15px;
+      object-fit: cover;
+    }
+
+    .legal-brand strong,
+    .legal-brand span {
+      display: block;
+    }
+
+    .legal-brand strong {
+      font-family: "Sora", sans-serif;
+    }
+
+    .legal-brand span {
+      color: var(--ink-soft);
+      font-size: 0.82rem;
     }
 
     .legal-page h1 {
       margin: 0;
       font-family: "Sora", sans-serif;
-      font-size: clamp(1.8rem, 4.5vw, 2.5rem);
-      letter-spacing: -0.02em;
+      font-size: clamp(2.4rem, 6vw, 4.8rem);
+      letter-spacing: -0.05em;
     }
 
     .legal-meta {
@@ -37,7 +67,7 @@
     .legal-page section {
       margin-top: 16px;
       padding-top: 14px;
-      border-top: 1px solid rgba(255, 255, 255, 0.6);
+      border-top: 1px solid var(--line);
     }
 
     .legal-page h2 {
@@ -68,10 +98,10 @@
       text-decoration: none;
       padding: 10px 14px;
       border-radius: 999px;
-      color: #0f2c4e;
-      background: rgba(255, 255, 255, 0.45);
-      border: 1px solid rgba(255, 255, 255, 0.7);
-      font-weight: 600;
+      color: white;
+      background: var(--ink);
+      border: 1px solid var(--ink);
+      font-weight: 700;
     }
   </style>
 </head>
@@ -85,6 +115,10 @@
 
   <div class="legal-wrap">
     <main class="legal-page glass">
+      <a class="legal-brand" href="./index.html">
+        <img src="./assets/profile.webp" alt="Raaghav Thirumaligai" />
+        <span><strong>Raagtex</strong><span>Native LaTeX Cockpit</span></span>
+      </a>
       <h1>Privacy Policy</h1>
       <p class="legal-meta">Effective date: April 21, 2026</p>
 
