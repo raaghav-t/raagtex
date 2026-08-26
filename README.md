@@ -14,7 +14,7 @@ Functional Apple-platform baseline:
 - iPad top bar controls (open/refresh/main file/engine/compile) with a cleaner sidebar focused on files/recent projects
 - iPad top bar quick controls for sidebar toggle, recent projects, current editor file, and editor/preview layout
 - Sidebar file explorer with nested project folders/files, quick `.tex` selection, and hidden LaTeX-generated supplementary artifacts
-- File creation from templates: document + style `.tex` libraries, text preview, and a template/style manager (`File -> Edit Templates…`) with editable display names separate from file names
+- File creation from templates: document + style `.tex` libraries, adaptive text/PDF preview, seeded note/article/homework/reading templates, and a template/style manager (`File -> Edit Templates…`) with editable display names separate from file names
 - Quick style import into the active project from template styles (`File -> Add Style…`)
 - Built-in editor for the selected main `.tex` file (save/revert + optional typo AutoCorrect, with `Cmd+S` save-only) plus adjustable text size
 - Optional in-editor LaTeX syntax coloring tool (grayscale token differentiation)

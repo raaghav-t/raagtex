@@ -18,6 +18,8 @@ targets:
       - path: ../Sources
       - path: Assets.xcassets
         buildPhase: resources
+      - path: iconLogo.icon
+        buildPhase: resources
     dependencies:
       - package: LocalPackage
         product: Core
@@ -36,7 +38,8 @@ targets:
         INFOPLIST_KEY_ITSAppUsesNonExemptEncryption: NO
         INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.productivity
         CODE_SIGN_ENTITLEMENTS: raagtex.entitlements
-        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_APPICON_NAME: iconLogo
+        ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS: YES
 schemes:
   raagtex:
     build:

@@ -74,3 +74,15 @@ struct TemplateEntry: Identifiable, Hashable {
         return fileURL.deletingPathExtension().lastPathComponent
     }
 }
+
+enum TemplatePDFPreviewStatus: Equatable {
+    case idle
+    case running
+    case ready(pdfURL: URL, refreshToken: Date)
+    case failed(String)
+}
+
+struct TemplatePDFPreviewState: Equatable {
+    let sourceSignature: String
+    let status: TemplatePDFPreviewStatus
+}

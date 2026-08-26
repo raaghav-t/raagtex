@@ -104,7 +104,8 @@ enum ProjectScanner {
                 continue
             }
 
-            if entry.url.pathExtension.caseInsensitiveCompare("tex") == .orderedSame {
+            if entry.url.pathExtension.caseInsensitiveCompare("tex") == .orderedSame,
+               isCompilableMainTexFile(entry.url) {
                 texFiles.append(relativePath)
             }
 
@@ -134,6 +135,25 @@ enum ProjectScanner {
     private static func shouldSkipDirectory(relativePath: String) -> Bool {
         let lower = relativePath.lowercased()
         return lower.hasPrefix("_minted-") || lower.contains("/_minted-")
+    }
+
+    private static func isCompilableMainTexFile(_ url: URL) -> Bool {
+        guard let source = try? String(contentsOf: url, encoding: .utf8) else {
+            return false
+        }
+        return firstMeaningfulLine(in: source)?.hasPrefix("\\documentclass") == true &&
+            source.range(of: #"\\begin\s*\{\s*document\s*\}"#, options: .regularExpression) != nil
+    }
+
+    private static func firstMeaningfulLine(in source: String) -> String? {
+        for rawLine in source.components(separatedBy: .newlines) {
+            let line = rawLine.trimmingCharacters(in: .whitespacesAndNewlines)
+            if line.isEmpty || line.hasPrefix("%") {
+                continue
+            }
+            return line
+        }
+        return nil
     }
 
     private static func isSupplementaryArtifact(relativePath: String) -> Bool {

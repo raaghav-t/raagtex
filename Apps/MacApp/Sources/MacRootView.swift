@@ -617,18 +617,28 @@ struct MacRootView: View {
 
             Divider()
 
-            PDFPreviewView(
-                pdfURL: viewModel.documentState.pdfURL,
-                refreshToken: viewModel.documentState.lastCompileAt,
-                interfaceTheme: effectiveInterfaceTheme,
-                onInverseSearch: { target in
-                    viewModel.handlePDFInverseSearch(target)
-                },
-                onDocumentDisplayed: { displayedAt in
-                    viewModel.notePDFDisplayed(at: displayedAt)
-                }
-            )
+            if let pdfURL = viewModel.documentState.pdfURL {
+                PDFPreviewView(
+                    pdfURL: pdfURL,
+                    refreshToken: viewModel.documentState.lastCompileAt,
+                    interfaceTheme: effectiveInterfaceTheme,
+                    onInverseSearch: { target in
+                        viewModel.handlePDFInverseSearch(target)
+                    },
+                    onDocumentDisplayed: { displayedAt in
+                        viewModel.notePDFDisplayed(at: displayedAt)
+                    }
+                )
+                    .background(previewBackground)
+            } else {
+                ContentUnavailableView(
+                    "No PDF Yet",
+                    systemImage: "doc.richtext",
+                    description: Text("Compile once to show the PDF preview.")
+                )
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(previewBackground)
+            }
         }
         .background {
             RoundedRectangle(cornerRadius: 16, style: .continuous)
@@ -876,26 +886,15 @@ struct MacRootView: View {
 
     @ToolbarContentBuilder
     private var windowToolbar: some ToolbarContent {
-        ToolbarItem(placement: .navigation) {
-            HStack(spacing: 10) {
-                Text("raagtex")
-                    .font(.headline.weight(.semibold))
-                if viewModel.projectRoot != nil {
-                    Text(viewModel.projectDisplayName)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                }
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 4)
-        }
-
         if viewModel.projectRoot != nil {
+            if #available(macOS 26.0, *) {
+                ToolbarSpacer(.flexible, placement: .primaryAction)
+            }
+
             ToolbarItemGroup(placement: .primaryAction) {
                 Menu {
                     if viewModel.texFiles.isEmpty {
-                        Text("No .tex files")
+                        Text("No document .tex files")
                     } else {
                         ForEach(viewModel.texFiles, id: \.self) { path in
                             Button(path) {
@@ -905,7 +904,7 @@ struct MacRootView: View {
                     }
                 } label: {
                     ToolbarMenuCapsule(
-                        title: viewModel.texFiles.isEmpty ? "No .tex files" : (viewModel.selectedMainTex.isEmpty ? "No .tex files" : viewModel.selectedMainTex),
+                        title: viewModel.texFiles.isEmpty ? "No document .tex files" : (viewModel.selectedMainTex.isEmpty ? "No document .tex files" : viewModel.selectedMainTex),
                         minWidth: 220
                     )
                 }
@@ -931,19 +930,18 @@ struct MacRootView: View {
 
                 SpeedCompileToolbarButton(isEnabled: $viewModel.speedCompileEnabled)
                     .padding(.leading, 4)
-                    .padding(.trailing, 10)
-            }
+                    .padding(.trailing, 8)
 
-            ToolbarItem(placement: .primaryAction) {
                 Text(viewModel.statusLine)
                     .font(.callout.weight(.medium))
                     .foregroundStyle(.secondary)
-                    .frame(minWidth: 130, alignment: .trailing)
-                    .padding(.trailing, 14)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .frame(width: 138, alignment: .trailing)
+                    .padding(.leading, 2)
+                    .padding(.trailing, 8)
                     .animation(.none, value: viewModel.statusLine)
-            }
 
-            ToolbarItemGroup(placement: .primaryAction) {
                 Button {
                     viewModel.compileNow(trigger: .manual)
                 } label: {

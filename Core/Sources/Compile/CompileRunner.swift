@@ -186,6 +186,12 @@ public enum LatexToolchainProbe {
         if includeDefaultToolPaths {
             candidates.append(contentsOf: [
                 "/Library/TeX/texbin",
+                "/Library/TeX/Distributions/Programs/texbin",
+                "/usr/local/texlive/2026/bin/universal-darwin",
+                "/usr/local/texlive/2025/bin/universal-darwin",
+                "/usr/local/texlive/2024/bin/universal-darwin",
+                "/usr/local/texlive/2023/bin/universal-darwin",
+                "/usr/local/texlive/2022/bin/universal-darwin",
                 "/opt/homebrew/bin",
                 "/usr/local/bin",
                 "/usr/bin",
@@ -193,6 +199,7 @@ public enum LatexToolchainProbe {
                 "/usr/sbin",
                 "/sbin"
             ])
+            candidates.append(contentsOf: discoveredTeXLiveBinPaths())
         }
 
         var unique: [String] = []
@@ -224,6 +231,27 @@ public enum LatexToolchainProbe {
             unique.append(executable)
         }
         return unique
+    }
+
+    private static func discoveredTeXLiveBinPaths() -> [String] {
+        let fileManager = FileManager.default
+        let root = "/usr/local/texlive"
+        guard let years = try? fileManager.contentsOfDirectory(atPath: root) else {
+            return []
+        }
+
+        return years
+            .filter { $0.allSatisfy(\.isNumber) }
+            .sorted(by: >)
+            .flatMap { year in
+                let binRoot = "\(root)/\(year)/bin"
+                guard let architectures = try? fileManager.contentsOfDirectory(atPath: binRoot) else {
+                    return [String]()
+                }
+                return architectures
+                    .sorted()
+                    .map { "\(binRoot)/\($0)" }
+            }
     }
 }
 
@@ -301,6 +329,12 @@ public struct LatexmkCompileRunner: CompileRunning {
             arguments.insert("-usepretex=\(Self.speedCompilePretex)", at: arguments.count - 1)
         }
         process.arguments = arguments
+        let commandLog = """
+        [raagtex] latexmk: \(latexmkExecutable)
+        [raagtex] engine: \(request.engine.rawValue)
+        [raagtex] working directory: \(request.projectRoot.path)
+        [raagtex] command: \(latexmkExecutable) \(arguments.joined(separator: " "))
+        """
 
         let outputPipe = Pipe()
         process.standardOutput = outputPipe
@@ -328,7 +362,7 @@ public struct LatexmkCompileRunner: CompileRunning {
                 }
             }
             let outputData = outputPipe.fileHandleForReading.readDataToEndOfFile()
-            var rawLog = String(data: outputData, encoding: .utf8) ?? ""
+            var rawLog = commandLog + "\n" + (String(data: outputData, encoding: .utf8) ?? "")
             if rawLog.isEmpty == false, rawLog.hasSuffix("\n") == false {
                 rawLog += "\n"
             }
@@ -337,7 +371,7 @@ public struct LatexmkCompileRunner: CompileRunning {
         }
 
         let outputData = outputPipe.fileHandleForReading.readDataToEndOfFile()
-        let rawLog = String(data: outputData, encoding: .utf8) ?? ""
+        let rawLog = commandLog + "\n" + (String(data: outputData, encoding: .utf8) ?? "")
         return (process.terminationStatus, rawLog)
         #endif
     }

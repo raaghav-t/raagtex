@@ -286,6 +286,7 @@ final class MacRootViewModel: ObservableObject {
     @Published private(set) var templateFolderURL: URL?
     @Published private(set) var documentTemplates: [TemplateEntry] = []
     @Published private(set) var styleTemplates: [TemplateEntry] = []
+    @Published private(set) var templatePDFPreviewStates: [String: TemplatePDFPreviewState] = [:]
     @Published private(set) var pendingNewFileDirectory = ""
     @Published private(set) var debugLastSaveAt: Date?
     @Published private(set) var debugLastCompileRequestedAt: Date?
@@ -1237,6 +1238,85 @@ final class MacRootViewModel: ObservableObject {
         return String(text.prefix(limit)) + "\n\n... preview truncated ..."
     }
 
+    func templatePDFPreviewState(for template: TemplateEntry?) -> TemplatePDFPreviewState {
+        guard let template else {
+            return TemplatePDFPreviewState(sourceSignature: "", status: .idle)
+        }
+        return templatePDFPreviewStates[template.id]
+            ?? TemplatePDFPreviewState(sourceSignature: templatePDFPreviewSignature(for: template), status: .idle)
+    }
+
+    func prepareTemplatePDFPreview(for template: TemplateEntry?, force: Bool = false) {
+        guard let template else { return }
+
+        let signature = templatePDFPreviewSignature(for: template)
+        if force == false,
+           let existing = templatePDFPreviewStates[template.id],
+           existing.sourceSignature == signature {
+            switch existing.status {
+            case .ready, .running:
+                return
+            case .idle, .failed:
+                break
+            }
+        }
+
+        let toolchainStatus = LatexToolchainProbe.check(engine: selectedEngine)
+        latexToolchainIssue = toolchainStatus.isReady ? nil : toolchainStatus
+        guard toolchainStatus.isReady else {
+            templatePDFPreviewStates[template.id] = TemplatePDFPreviewState(
+                sourceSignature: signature,
+                status: .failed("\(toolchainStatus.primaryMessage). \(toolchainStatus.recoveryMessage)")
+            )
+            return
+        }
+
+        templatePDFPreviewStates[template.id] = TemplatePDFPreviewState(sourceSignature: signature, status: .running)
+
+        let runner = compileRunner
+        let engine = selectedEngine
+        let sourceStyleTemplates = styleTemplates
+        Task {
+            do {
+                let previewProject = try self.makeTemplatePDFPreviewProject(
+                    for: template,
+                    styleTemplates: sourceStyleTemplates
+                )
+                let request = CompileRequest(
+                    projectRoot: previewProject,
+                    mainFileRelativePath: "main.tex",
+                    engine: engine,
+                    autoCompile: false,
+                    forceRebuild: true
+                )
+                let result = try await Task.detached(priority: .userInitiated) {
+                    try await runner.compile(request)
+                }.value
+
+                await MainActor.run {
+                    if result.status == .succeeded, let pdfURL = result.pdfURL {
+                        self.templatePDFPreviewStates[template.id] = TemplatePDFPreviewState(
+                            sourceSignature: signature,
+                            status: .ready(pdfURL: pdfURL, refreshToken: result.finishedAt)
+                        )
+                    } else {
+                        self.templatePDFPreviewStates[template.id] = TemplatePDFPreviewState(
+                            sourceSignature: signature,
+                            status: .failed(self.compileFailureBanner(for: result.rawLog))
+                        )
+                    }
+                }
+            } catch {
+                await MainActor.run {
+                    self.templatePDFPreviewStates[template.id] = TemplatePDFPreviewState(
+                        sourceSignature: signature,
+                        status: .failed(error.localizedDescription)
+                    )
+                }
+            }
+        }
+    }
+
     func promptSelectTemplateFolder() {
         let panel = NSOpenPanel()
         panel.canChooseFiles = false
@@ -2035,6 +2115,91 @@ final class MacRootViewModel: ObservableObject {
         return folderURL.standardizedFileURL
     }
 
+    private func templatePDFPreviewSignature(for template: TemplateEntry) -> String {
+        var components = [
+            template.id,
+            selectedEngine.rawValue,
+            "\(template.lastModifiedAt?.timeIntervalSince1970 ?? 0)"
+        ]
+        if template.kind == .document {
+            components.append(
+                contentsOf: styleTemplates.map {
+                    "\($0.id):\($0.lastModifiedAt?.timeIntervalSince1970 ?? 0)"
+                }
+            )
+        }
+        return components.joined(separator: "|")
+    }
+
+    private func makeTemplatePDFPreviewProject(
+        for template: TemplateEntry,
+        styleTemplates: [TemplateEntry]
+    ) throws -> URL {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("raagtex-template-previews", isDirectory: true)
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+
+        switch template.kind {
+        case .document:
+            let source = try String(contentsOf: template.fileURL, encoding: .utf8)
+            try source.write(to: root.appendingPathComponent("main.tex"), atomically: true, encoding: .utf8)
+            try copyTemplateStyles(styleTemplates, to: root)
+        case .style:
+            try FileManager.default.copyItem(
+                at: template.fileURL,
+                to: root.appendingPathComponent(template.fileName)
+            )
+            let source = stylePDFPreviewDocumentSource(styleFileName: template.fileName)
+            try source.write(to: root.appendingPathComponent("main.tex"), atomically: true, encoding: .utf8)
+        }
+
+        return root
+    }
+
+    private func copyTemplateStyles(_ templates: [TemplateEntry], to directory: URL) throws {
+        for template in templates {
+            let destination = directory.appendingPathComponent(template.fileName)
+            if FileManager.default.fileExists(atPath: destination.path) == false {
+                try FileManager.default.copyItem(at: template.fileURL, to: destination)
+            }
+        }
+    }
+
+    private func stylePDFPreviewDocumentSource(styleFileName: String) -> String {
+        """
+        \\documentclass[11pt]{article}
+
+        \\newif\\ifdarkmode
+        \\darkmodefalse
+
+        \\IfFileExists{\(styleFileName)}{\\input{\(styleFileName)}}{}
+
+        \\title{Style Preview}
+        \\author{raagtex}
+        \\date{\\today}
+
+        \\begin{document}
+
+        \\maketitle
+
+        \\section{Sample Section}
+
+        This page previews the selected style template with prose, links, and mathematics.
+
+        \\[
+            \\int_0^1 x^2\\,dx = \\frac{1}{3}
+        \\]
+
+        \\begin{itemize}
+            \\item A short list item for spacing.
+            \\item A second item with \\href{https://example.com}{sample link color}.
+        \\end{itemize}
+
+        \\end{document}
+        """
+    }
+
     private func defaultTemplateRootURL() -> URL {
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
             ?? URL(fileURLWithPath: NSHomeDirectory(), isDirectory: true).appendingPathComponent("Library/Application Support")
@@ -2044,15 +2209,30 @@ final class MacRootViewModel: ObservableObject {
     }
 
     private func seedDefaultTemplates(documentDirectory: URL, styleDirectory: URL) {
-        let defaultDocumentURL = documentDirectory.appendingPathComponent("main.tex")
-        let defaultStyleURL = styleDirectory.appendingPathComponent("note_style.tex")
+        for template in defaultDocumentTemplates {
+            seedDefaultTemplate(template, in: documentDirectory)
+        }
 
-        if FileManager.default.fileExists(atPath: defaultDocumentURL.path) == false {
-            try? defaultDocumentTemplateText.write(to: defaultDocumentURL, atomically: true, encoding: .utf8)
+        for template in defaultStyleTemplates {
+            seedDefaultTemplate(template, in: styleDirectory)
         }
-        if FileManager.default.fileExists(atPath: defaultStyleURL.path) == false {
-            try? defaultStyleTemplateText.write(to: defaultStyleURL, atomically: true, encoding: .utf8)
+    }
+
+    private func seedDefaultTemplate(_ template: DefaultTemplateSeed, in directory: URL) {
+        let destinationURL = directory.appendingPathComponent(template.fileName)
+        if FileManager.default.fileExists(atPath: destinationURL.path) == false {
+            try? template.contents.write(to: destinationURL, atomically: true, encoding: .utf8)
+            return
         }
+
+        guard
+            let legacyContents = template.legacyContents,
+            let currentContents = try? String(contentsOf: destinationURL, encoding: .utf8),
+            currentContents == legacyContents
+        else {
+            return
+        }
+        try? template.contents.write(to: destinationURL, atomically: true, encoding: .utf8)
     }
 
     private func scanTemplates(in directory: URL, kind: TemplateKind) -> [TemplateEntry] {
@@ -2149,9 +2329,49 @@ final class MacRootViewModel: ObservableObject {
 
         if let styleFileName, isTexFile {
             content = applyStyleReference(styleFileName: styleFileName, to: content, createDocumentShellIfNeeded: documentTemplate == nil)
+        } else if documentTemplate != nil, isTexFile {
+            try copyReferencedStyleTemplates(in: content, to: destinationDirectoryURL)
         }
 
         return content
+    }
+
+    private func copyReferencedStyleTemplates(in source: String, to directoryURL: URL) throws {
+        let referencedStyleFileNames = styleTemplateFileNames(referencedIn: source)
+        guard referencedStyleFileNames.isEmpty == false else { return }
+
+        for fileName in referencedStyleFileNames {
+            guard
+                let template = styleTemplates.first(where: { $0.fileName == fileName }),
+                FileManager.default.fileExists(atPath: directoryURL.appendingPathComponent(fileName).path) == false
+            else {
+                continue
+            }
+            try FileManager.default.copyItem(at: template.fileURL, to: directoryURL.appendingPathComponent(fileName))
+        }
+    }
+
+    private func styleTemplateFileNames(referencedIn source: String) -> [String] {
+        let pattern = #"(?:\\input|\\IfFileExists)\{([^}]+_style\.tex)\}"#
+        guard let regex = try? NSRegularExpression(pattern: pattern) else { return [] }
+
+        let nsSource = source as NSString
+        let fullRange = NSRange(location: 0, length: nsSource.length)
+        var results: [String] = []
+        var seen = Set<String>()
+        regex.enumerateMatches(in: source, range: fullRange) { match, _, _ in
+            guard
+                let match,
+                match.numberOfRanges > 1,
+                match.range(at: 1).location != NSNotFound
+            else { return }
+
+            let fileName = nsSource.substring(with: match.range(at: 1))
+            if seen.insert(fileName).inserted {
+                results.append(fileName)
+            }
+        }
+        return results
     }
 
     private func applyStyleReference(
@@ -2160,9 +2380,24 @@ final class MacRootViewModel: ObservableObject {
         createDocumentShellIfNeeded: Bool
     ) -> String {
         let styleInclude = "\\IfFileExists{\(styleFileName)}{\\input{\(styleFileName)}}{}"
+        let escapedStyleInclude = NSRegularExpression.escapedTemplate(for: styleInclude)
 
-        if source.contains("\\input{note_style.tex}") {
-            return source.replacingOccurrences(of: "\\input{note_style.tex}", with: styleInclude)
+        let styleIncludePattern = #"\\IfFileExists\{[^}]+_style\.tex\}\{\\input\{[^}]+_style\.tex\}\}(?:\{\})?"#
+        if source.range(of: styleIncludePattern, options: .regularExpression) != nil {
+            return source.replacingOccurrences(
+                of: styleIncludePattern,
+                with: escapedStyleInclude,
+                options: .regularExpression
+            )
+        }
+
+        let directStyleInputPattern = #"\\input\{[^}]+_style\.tex\}"#
+        if source.range(of: directStyleInputPattern, options: .regularExpression) != nil {
+            return source.replacingOccurrences(
+                of: directStyleInputPattern,
+                with: escapedStyleInclude,
+                options: .regularExpression
+            )
         }
 
         if let beginDocumentRange = source.range(of: "\\begin{document}") {
@@ -2498,6 +2733,300 @@ final class MacRootViewModel: ObservableObject {
     }
 
     private var defaultDocumentTemplateText: String {
+        defaultNoteDocumentTemplateText
+    }
+
+    private var defaultStyleTemplateText: String {
+        defaultNoteStyleTemplateText
+    }
+
+    private var defaultDocumentTemplates: [DefaultTemplateSeed] {
+        [
+            DefaultTemplateSeed(
+                fileName: "main.tex",
+                contents: defaultNoteDocumentTemplateText,
+                legacyContents: legacyDefaultDocumentTemplateText
+            ),
+            DefaultTemplateSeed(fileName: "article.tex", contents: articleDocumentTemplateText),
+            DefaultTemplateSeed(fileName: "homework.tex", contents: homeworkDocumentTemplateText),
+            DefaultTemplateSeed(fileName: "reading_notes.tex", contents: readingNotesDocumentTemplateText)
+        ]
+    }
+
+    private var defaultStyleTemplates: [DefaultTemplateSeed] {
+        [
+            DefaultTemplateSeed(
+                fileName: "note_style.tex",
+                contents: defaultNoteStyleTemplateText,
+                legacyContents: legacyDefaultStyleTemplateText
+            ),
+            DefaultTemplateSeed(fileName: "academic_style.tex", contents: academicStyleTemplateText),
+            DefaultTemplateSeed(fileName: "handout_style.tex", contents: handoutStyleTemplateText)
+        ]
+    }
+
+    private var defaultNoteDocumentTemplateText: String {
+        """
+        \\documentclass[11pt]{article}
+
+        % Toggle the PDF palette explicitly.
+        \\newif\\ifdarkmode
+        %\\darkmodetrue
+        \\darkmodefalse
+
+        \\IfFileExists{note_style.tex}{\\input{note_style.tex}}{}
+
+        \\subject{Course Name}
+        \\notetitle{Title Here}
+        \\notedate{\\today}
+        \\tags{tag1, tag2}
+
+        \\begin{document}
+
+        {\\huge\\bfseries \\noteTitle}
+
+        \\vspace{0.5em}
+        \\textcolor{line}{\\rule{\\linewidth}{0.8pt}}
+
+        \\topic{Section Title}
+
+        Write your content here.
+
+        \\end{document}
+        """
+    }
+
+    private var articleDocumentTemplateText: String {
+        """
+        \\documentclass[11pt]{article}
+
+        \\newif\\ifdarkmode
+        \\darkmodefalse
+
+        \\IfFileExists{academic_style.tex}{\\input{academic_style.tex}}{}
+
+        \\title{Article Title}
+        \\author{Author Name}
+        \\date{\\today}
+
+        \\begin{document}
+
+        \\maketitle
+
+        \\begin{abstract}
+        Write a short summary here.
+        \\end{abstract}
+
+        \\section{Introduction}
+
+        Write your introduction here.
+
+        \\section{Main Argument}
+
+        Develop the main idea here.
+
+        \\end{document}
+        """
+    }
+
+    private var homeworkDocumentTemplateText: String {
+        """
+        \\documentclass[11pt]{article}
+
+        \\newif\\ifdarkmode
+        \\darkmodefalse
+
+        \\IfFileExists{handout_style.tex}{\\input{handout_style.tex}}{}
+
+        \\title{Problem Set}
+        \\author{Your Name}
+        \\date{\\today}
+
+        \\begin{document}
+
+        \\maketitle
+
+        \\section*{Problem 1}
+
+        \\begin{solution}
+        Write your solution here.
+        \\end{solution}
+
+        \\section*{Problem 2}
+
+        \\begin{solution}
+        Write your solution here.
+        \\end{solution}
+
+        \\end{document}
+        """
+    }
+
+    private var readingNotesDocumentTemplateText: String {
+        """
+        \\documentclass[11pt]{article}
+
+        \\newif\\ifdarkmode
+        \\darkmodefalse
+
+        \\IfFileExists{note_style.tex}{\\input{note_style.tex}}{}
+
+        \\subject{Reading}
+        \\notetitle{Source Title}
+        \\notedate{\\today}
+        \\tags{author, topic}
+
+        \\begin{document}
+
+        {\\huge\\bfseries \\noteTitle}
+
+        \\vspace{0.35em}
+        \\textcolor{muted}{\\subjectName \\quad \\noteDate \\quad \\noteTags}
+
+        \\vspace{0.5em}
+        \\textcolor{line}{\\rule{\\linewidth}{0.8pt}}
+
+        \\topic{Summary}
+
+        Write the core claim here.
+
+        \\topic{Key Passages}
+
+        \\begin{itemize}
+            \\item Add a passage or citation.
+        \\end{itemize}
+
+        \\topic{Questions}
+
+        \\begin{itemize}
+            \\item Add a question to revisit.
+        \\end{itemize}
+
+        \\end{document}
+        """
+    }
+
+    private var defaultNoteStyleTemplateText: String {
+        """
+        % Shared style template
+        \\usepackage[margin=1in]{geometry}
+        \\usepackage[T1]{fontenc}
+        \\usepackage[utf8]{inputenc}
+        \\usepackage{lmodern}
+        \\usepackage{amsmath,amssymb,mathtools,bm}
+        \\usepackage[table]{xcolor}
+        \\usepackage{hyperref}
+
+        \\makeatletter
+        \\@ifundefined{ifdarkmode}{\\newif\\ifdarkmode\\darkmodefalse}{}
+        \\makeatother
+
+        \\ifdarkmode
+            \\definecolor{pagebg}{HTML}{111315}
+            \\definecolor{textmain}{HTML}{E8E6E3}
+            \\definecolor{muted}{HTML}{AFA8A0}
+            \\definecolor{accent}{HTML}{D6A66D}
+            \\definecolor{line}{HTML}{3F454B}
+            \\definecolor{linkcolor}{HTML}{8AB4F8}
+        \\else
+            \\definecolor{pagebg}{HTML}{FFFFFF}
+            \\definecolor{textmain}{HTML}{2D221B}
+            \\definecolor{muted}{HTML}{6E6258}
+            \\definecolor{accent}{HTML}{8C5A2B}
+            \\definecolor{line}{HTML}{D8C7B4}
+            \\definecolor{linkcolor}{HTML}{315F9B}
+        \\fi
+
+        \\pagecolor{pagebg}
+        \\color{textmain}
+        \\hypersetup{colorlinks=true, linkcolor=linkcolor, urlcolor=linkcolor, citecolor=linkcolor}
+        \\newcommand{\\subject}[1]{\\def\\subjectName{#1}}
+        \\newcommand{\\notetitle}[1]{\\def\\noteTitle{#1}}
+        \\newcommand{\\notedate}[1]{\\def\\noteDate{#1}}
+        \\newcommand{\\tags}[1]{\\def\\noteTags{#1}}
+        \\newcommand{\\topic}[1]{\\section*{\\textcolor{accent}{#1}}}
+        \\providecommand{\\subjectName}{}
+        \\providecommand{\\noteTitle}{Untitled}
+        \\providecommand{\\noteDate}{}
+        \\providecommand{\\noteTags}{}
+        """
+    }
+
+    private var academicStyleTemplateText: String {
+        """
+        % Academic article style
+        \\usepackage[margin=1in]{geometry}
+        \\usepackage[T1]{fontenc}
+        \\usepackage[utf8]{inputenc}
+        \\usepackage{lmodern}
+        \\usepackage{microtype}
+        \\usepackage{amsmath,amssymb,mathtools}
+        \\usepackage{xcolor}
+        \\usepackage{hyperref}
+
+        \\makeatletter
+        \\@ifundefined{ifdarkmode}{\\newif\\ifdarkmode\\darkmodefalse}{}
+        \\makeatother
+
+        \\ifdarkmode
+            \\definecolor{pagebg}{HTML}{101214}
+            \\definecolor{textmain}{HTML}{ECE8E1}
+            \\definecolor{accent}{HTML}{B9C8A8}
+            \\definecolor{linkcolor}{HTML}{95B8FF}
+        \\else
+            \\definecolor{pagebg}{HTML}{FFFFFF}
+            \\definecolor{textmain}{HTML}{202124}
+            \\definecolor{accent}{HTML}{365C46}
+            \\definecolor{linkcolor}{HTML}{244E89}
+        \\fi
+
+        \\pagecolor{pagebg}
+        \\color{textmain}
+        \\hypersetup{colorlinks=true, linkcolor=linkcolor, urlcolor=linkcolor, citecolor=linkcolor}
+        \\setlength{\\parskip}{0.35em}
+        \\setlength{\\parindent}{1.2em}
+        \\let\\oldsection\\section
+        \\renewcommand{\\section}[1]{\\oldsection{\\textcolor{accent}{#1}}}
+        """
+    }
+
+    private var handoutStyleTemplateText: String {
+        """
+        % Homework and handout style
+        \\usepackage[margin=0.9in]{geometry}
+        \\usepackage[T1]{fontenc}
+        \\usepackage[utf8]{inputenc}
+        \\usepackage{lmodern}
+        \\usepackage{amsmath,amssymb,mathtools}
+        \\usepackage{xcolor}
+        \\usepackage{hyperref}
+
+        \\makeatletter
+        \\@ifundefined{ifdarkmode}{\\newif\\ifdarkmode\\darkmodefalse}{}
+        \\makeatother
+
+        \\ifdarkmode
+            \\definecolor{pagebg}{HTML}{111315}
+            \\definecolor{textmain}{HTML}{F0EDE7}
+            \\definecolor{boxline}{HTML}{5A6A73}
+            \\definecolor{linkcolor}{HTML}{8AB4F8}
+        \\else
+            \\definecolor{pagebg}{HTML}{FFFFFF}
+            \\definecolor{textmain}{HTML}{202124}
+            \\definecolor{boxline}{HTML}{B7C0C8}
+            \\definecolor{linkcolor}{HTML}{315F9B}
+        \\fi
+
+        \\pagecolor{pagebg}
+        \\color{textmain}
+        \\hypersetup{colorlinks=true, linkcolor=linkcolor, urlcolor=linkcolor, citecolor=linkcolor}
+        \\newenvironment{solution}
+            {\\par\\medskip\\noindent\\textcolor{boxline}{\\hrule}\\smallskip\\noindent\\textbf{Solution}\\par\\smallskip}
+            {\\par\\smallskip\\textcolor{boxline}{\\hrule}\\medskip}
+        """
+    }
+
+    private var legacyDefaultDocumentTemplateText: String {
         """
         \\documentclass[11pt]{article}
 
@@ -2528,7 +3057,7 @@ final class MacRootViewModel: ObservableObject {
         """
     }
 
-    private var defaultStyleTemplateText: String {
+    private var legacyDefaultStyleTemplateText: String {
         """
         % Shared style template
         \\usepackage[margin=1in]{geometry}
@@ -2558,6 +3087,18 @@ final class MacRootViewModel: ObservableObject {
         \\newcommand{\\tags}[1]{\\def\\noteTags{#1}}
         \\newcommand{\\topic}[1]{\\section{#1}}
         """
+    }
+}
+
+private struct DefaultTemplateSeed {
+    let fileName: String
+    let contents: String
+    let legacyContents: String?
+
+    init(fileName: String, contents: String, legacyContents: String? = nil) {
+        self.fileName = fileName
+        self.contents = contents
+        self.legacyContents = legacyContents
     }
 }
 

@@ -129,7 +129,9 @@ struct PDFPreviewView: NSViewRepresentable {
             lastRefreshToken = refreshToken
             applyInternalBackgroundStyling(to: view, canvasColor: canvasColor)
             restoreViewState(on: view)
-            onDocumentDisplayed?(Date())
+            DispatchQueue.main.async { [weak self] in
+                self?.onDocumentDisplayed?(Date())
+            }
         }
 
         func scheduleLoadRetry(
