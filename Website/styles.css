@@ -58,7 +58,7 @@ a { color: inherit; }
   width: min(1440px, calc(100% - 30px));
   margin: 18px auto 28px;
   display: grid;
-  grid-template-columns: 310px minmax(0, 1fr);
+  grid-template-columns: 330px minmax(0, 1fr);
   gap: 16px;
   align-items: start;
 }
@@ -87,8 +87,8 @@ a { color: inherit; }
 }
 
 .avatar {
-  width: 274px;
-  height: 274px;
+  width: 294px;
+  height: 294px;
   display: block;
   object-fit: cover;
   border: 2px solid rgba(255, 255, 255, 0.78);
@@ -288,7 +288,13 @@ a { color: inherit; }
   border-radius: 24px;
 }
 
-.hero-media figcaption { padding: 11px 8px 5px; color: #f7f2ed; font-size: 0.8rem; line-height: 1.4; }
+.hero-media figcaption {
+  padding: 18px 10px 8px;
+  color: #f7f2ed;
+  font-size: clamp(1.15rem, 1.8vw, 1.45rem);
+  font-weight: 600;
+  line-height: 1.35;
+}
 
 .grid {
   display: grid;
